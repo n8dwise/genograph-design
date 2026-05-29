@@ -1,70 +1,316 @@
-#paper-container {
-    position: absolute;
-    right: 0;
-    top: 0;
-    left: 0;
-    bottom: 0;
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 13px;
+    background: #f1f5f9;
+    color: #111827;
+    height: 100vh;
     overflow: hidden;
 }
 
-#controls {
-    position: absolute;
-    top: 20px;
-    left: 20px;
+#app {
     display: flex;
-    gap: 8px;
-    z-index: 10;
+    flex-direction: column;
+    height: 100vh;
 }
 
-#dataset-select,
-#link-style-toggle {
-    padding: 6px 10px;
-    font-size: 14px;
-    font-family: Arial, helvetica, sans-serif;
-    border: 1px solid #ccc;
-    border-radius: 4px;
+/* ── Toolbar ── */
+#toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 16px;
+    height: 48px;
+    background: #1e293b;
+    color: #f8fafc;
+    flex-shrink: 0;
+    border-bottom: 1px solid #0f172a;
+}
+
+.app-title {
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 0.02em;
+    color: #e2e8f0;
+    margin-right: 4px;
+    flex-shrink: 0;
+}
+
+#tree-title {
+    flex: 1;
+    max-width: 260px;
+    background: #334155;
+    border: 1px solid #475569;
+    border-radius: 5px;
+    padding: 4px 10px;
+    color: #f1f5f9;
+    font-size: 13px;
+    outline: none;
+}
+#tree-title:focus { border-color: #94a3b8; }
+#tree-title::placeholder { color: #64748b; }
+
+.toolbar-actions {
+    display: flex;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.toolbar-actions button {
+    padding: 5px 12px;
+    border-radius: 5px;
+    border: 1px solid #475569;
+    background: #334155;
+    color: #e2e8f0;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.toolbar-actions button:hover { background: #475569; }
+
+/* ── Main layout ── */
+#main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* ── Editor panel ── */
+#editor-panel {
+    width: 260px;
+    flex-shrink: 0;
+    background: #ffffff;
+    border-right: 1px solid #e2e8f0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.editor-section {
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 8px;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px 6px;
+    position: sticky;
+    top: 0;
     background: #fff;
+    z-index: 1;
+}
+
+.section-header h3 {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+}
+
+.btn-add {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    color: #374151;
+    cursor: pointer;
+}
+.btn-add:hover { background: #e2e8f0; }
+
+/* ── List items ── */
+.list-item {
+    display: flex;
+    align-items: center;
+    padding: 5px 12px;
+    gap: 6px;
+    cursor: pointer;
+    border-radius: 4px;
+    margin: 1px 6px;
+    transition: background 0.1s;
+}
+.list-item:hover { background: #f1f5f9; }
+.list-item.active { background: #eff6ff; }
+
+.list-item-label {
+    flex: 1;
+    font-size: 12px;
+    color: #374151;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.list-item-badge {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.sex-M { background: #2563eb; }
+.sex-F { background: #db2777; }
+.sex-O { background: #7c3aed; }
+.sex-unknown { background: #9ca3af; }
+
+.quality-green  { background: #16a34a; }
+.quality-yellow { background: #ca8a04; }
+.quality-red    { background: #dc2626; }
+.quality-neutral { background: #9ca3af; }
+
+.btn-delete {
+    padding: 1px 6px;
+    font-size: 11px;
+    border-radius: 3px;
+    border: none;
+    background: transparent;
+    color: #94a3b8;
+    cursor: pointer;
+    line-height: 1.4;
+}
+.btn-delete:hover { color: #dc2626; background: #fee2e2; }
+
+/* ── Inline edit form ── */
+.edit-form {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    margin: 4px 8px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.edit-form label {
+    font-size: 11px;
+    color: #64748b;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.edit-form input[type="text"],
+.edit-form select {
+    width: 100%;
+    padding: 4px 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #111827;
+    background: #fff;
+    outline: none;
+}
+.edit-form input:focus,
+.edit-form select:focus { border-color: #2563eb; }
+
+.sex-options, .quality-options {
+    display: flex;
+    gap: 6px;
+}
+
+.sex-btn, .quality-btn {
+    flex: 1;
+    padding: 4px 0;
+    border-radius: 4px;
+    border: 1.5px solid #cbd5e1;
+    background: #fff;
+    font-size: 11px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.1s;
+}
+
+.sex-btn.active-M      { border-color: #2563eb; background: #dbeafe; color: #1d4ed8; font-weight: 600; }
+.sex-btn.active-F      { border-color: #db2777; background: #fce7f3; color: #9d174d; font-weight: 600; }
+.sex-btn.active-O      { border-color: #7c3aed; background: #ede9fe; color: #5b21b6; font-weight: 600; }
+.sex-btn.active-unknown { border-color: #6b7280; background: #e5e7eb; color: #374151; font-weight: 600; }
+
+.quality-btn.active-green  { border-color: #16a34a; background: #dcfce7; color: #15803d; font-weight: 600; }
+.quality-btn.active-yellow { border-color: #ca8a04; background: #fef9c3; color: #854d0e; font-weight: 600; }
+.quality-btn.active-red    { border-color: #dc2626; background: #fee2e2; color: #991b1b; font-weight: 600; }
+.quality-btn.active-none   { border-color: #9ca3af; background: #f3f4f6; color: #4b5563; font-weight: 600; }
+
+.form-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.btn-save-form {
+    flex: 1;
+    padding: 5px;
+    border-radius: 4px;
+    border: none;
+    background: #2563eb;
+    color: #fff;
+    font-size: 12px;
+    cursor: pointer;
+}
+.btn-save-form:hover { background: #1d4ed8; }
+
+.btn-cancel-form {
+    padding: 5px 10px;
+    border-radius: 4px;
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    color: #374151;
+    font-size: 12px;
+    cursor: pointer;
+}
+.btn-cancel-form:hover { background: #f1f5f9; }
+
+.checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #374151;
     cursor: pointer;
 }
 
-#link-style-toggle:hover {
-    background: #f0f0f0;
+/* ── Diagram panel ── */
+#diagram-panel {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: #f8fafc;
 }
 
-#logo {
+#paper-container {
+    width: 100%;
+    height: 100%;
     position: absolute;
-    bottom: 10px;
-    left: 0px;
+    inset: 0;
+    overflow: hidden;
 }
 
-.joint-paper {
-    border: 1px solid #e2e8dd;
+#diagram-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    color: #94a3b8;
+    font-size: 14px;
+    text-align: center;
+    line-height: 1.6;
 }
+#diagram-empty.hidden { display: none; }
 
-.joint-element {
-    transition: opacity 0.3s ease;
-}
+/* ── JointJS overrides ── */
+.joint-paper { border: none !important; outline: none !important; }
 
-.joint-element.dimmed {
-    opacity: 0.1;
-}
+.joint-element { transition: opacity 0.2s ease; }
+.joint-element.dimmed { opacity: 0.12; }
 
-/* We avoid using opacity for links because their segments can overlap.
-With opacity, intersections would appear darker, creating visual artifacts.
-Instead, we lighten the stroke color directly. */
-.joint-link [joint-selector="line"] {
-    transition: stroke 0.3s ease;
-}
-
-.joint-link.dimmed [joint-selector="line"] {
-    stroke: #e2e8dd;
-}
-
-.hover-highlight {
-    opacity: 1;
-    transition: opacity 0.3s ease;
-
-    @starting-style {
-        opacity: 0;
-    }
-}
+.joint-link [joint-selector="line"] { transition: stroke 0.2s ease; }
+.joint-link.dimmed [joint-selector="line"] { stroke: #e2e8f0; }

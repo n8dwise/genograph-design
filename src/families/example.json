@@ -1,0 +1,49 @@
+{
+  "meta": { "title": "Example Family" },
+  "persons": [
+    { "id": 1, "name": "George Sr.", "sex": "M", "dob": "1945", "dod": "2010" },
+    { "id": 2, "name": "Alice Sr.", "sex": "F", "dob": "1948" },
+    { "id": 3, "name": "Robert", "sex": "M", "dob": "1970", "isIndexPerson": true },
+    { "id": 4, "name": "Susan", "sex": "F", "dob": "1972" },
+    { "id": 5, "name": "Linda", "sex": "F", "dob": "1968" },
+    { "id": 6, "name": "Karen", "sex": "F", "dob": "1975" },
+    { "id": 7, "name": "Emma", "sex": "F", "dob": "1995" },
+    { "id": 8, "name": "Jack", "sex": "M", "dob": "1998" },
+    { "id": 9, "name": "Tom", "sex": "M", "dob": "2005" },
+    { "id": 10, "name": "David", "sex": "M", "dob": "1969" },
+    { "id": 11, "name": "Lily", "sex": "F", "dob": "2000" }
+  ],
+  "unions": [
+    {
+      "id": "u1",
+      "partners": [1, 2],
+      "type": "married",
+      "status": "active",
+      "quality": "green",
+      "children": [3, 4]
+    },
+    {
+      "id": "u2",
+      "partners": [3, 5],
+      "type": "married",
+      "status": "divorced",
+      "quality": "red",
+      "children": [7, 8]
+    },
+    {
+      "id": "u3",
+      "partners": [3, 6],
+      "type": "married",
+      "status": "active",
+      "quality": "yellow",
+      "children": [9]
+    },
+    {
+      "id": "u4",
+      "partners": [4, 10],
+      "type": "cohabiting",
+      "status": "active",
+      "children": [11]
+    }
+  ]
+}

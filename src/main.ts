@@ -1,31 +1,32 @@
 import { dia, shapes } from '@joint/core';
-import { MalePerson, FemalePerson, UnknownPerson, ParentChildLink, MateLink, IdenticalLink } from './shapes';
+import {
+    MalePerson, FemalePerson, OtherPerson, UnknownPerson,
+    ParentChildLink, MateLink, UnionBox,
+} from './shapes';
 import { colors, sizes, linkStyleOverrides } from './theme';
-import { getParentChildLinks, getMateLinks } from './data';
+import {
+    toLayoutPersonNodes, getParentChildLinks, getMateLinks, DEFAULT_FAMILY_DATA,
+} from './data';
+import type { FamilyData } from './data';
 import { layoutGenogram } from './layout';
-import { createPersonElement, setupLineageHighlighting, buildFamilyTree } from './utils';
-import { applySymbolHighlighters } from './highlighters';
+import { applyPersonHighlighters } from './highlighters';
+import { createPersonElement } from './utils';
+import { initEditor, setEditorData, addPerson, addUnion } from './editor';
+import { saveFile, loadFile, exportPng } from './storage';
 import './styles.css';
 
-import type { PersonNode } from './data';
+// ── JointJS setup ─────────────────────────────────────────────────────────────
 
-// --- All available datasets (Vite eager imports) ---
-const dataModules = import.meta.glob<PersonNode[]>('./families/*.json', { eager: true, import: 'default' });
-
-function getDataset(filename: string): PersonNode[] {
-    const key = `./families/${filename}`;
-    const data = dataModules[key];
-    if (!data) throw new Error(`Unknown dataset: ${filename}`);
-    return data;
-}
-
-// --- Paper setup (created once) ---
 const cellNamespace = {
     ...shapes,
-    genogram: { MalePerson, FemalePerson, UnknownPerson, ParentChildLink, MateLink, IdenticalLink }
+    genogram: {
+        MalePerson, FemalePerson, OtherPerson, UnknownPerson,
+        ParentChildLink, MateLink, UnionBox,
+    },
 };
 
 const graph = new dia.Graph({}, { cellNamespace });
+
 const paper = new dia.Paper({
     model: graph,
     cellViewNamespace: cellNamespace,
@@ -37,71 +38,110 @@ const paper = new dia.Paper({
     frozen: true,
     autoFreeze: true,
     background: { color: colors.paperBackground },
-    defaultConnector: {
-        name: 'straight',
-    },
-    defaultConnectionPoint: { name: 'rectangle', args: { useModelGeometry: true }},
-    defaultAnchor: {
-        name: 'center',
-        args: { useModelGeometry: true }
-    }
+    defaultConnector: { name: 'straight' },
+    defaultConnectionPoint: { name: 'rectangle', args: { useModelGeometry: true } },
+    defaultAnchor: { name: 'center', args: { useModelGeometry: true } },
 });
 
 document.getElementById('paper-container')!.appendChild(paper.el);
 
-// --- Hover highlighting ---
-let familyTree = new dia.Graph();
-setupLineageHighlighting(paper, graph, () => familyTree);
+// ── Render ────────────────────────────────────────────────────────────────────
 
-// --- Link style state ---
-let linkStyle: 'fan' | 'orthogonal' = 'fan';
+let currentData: FamilyData = structuredClone(DEFAULT_FAMILY_DATA);
 
-// --- Build and render a dataset ---
-function renderDataset(filename: string) {
-    const persons = getDataset(filename);
-    const parentChildLinks = getParentChildLinks(persons);
-    const mateLinks = getMateLinks(persons);
-    const elements: dia.Element[] = persons.map((person) => createPersonElement(person));
-    const layoutSizes = { ...sizes, ...linkStyleOverrides[linkStyle] };
+function render(data: FamilyData) {
+    currentData = data;
+
+    const empty = document.getElementById('diagram-empty')!;
+
+    if (data.persons.length === 0) {
+        graph.resetCells([]);
+        empty.classList.remove('hidden');
+        return;
+    }
+    empty.classList.add('hidden');
+
+    const layoutPersons = toLayoutPersonNodes(data);
+    const parentChildLinks = getParentChildLinks(data);
+    const mateLinks = getMateLinks(data);
+    const elements = data.persons.map(createPersonElement);
+    const layoutSizes = { ...sizes, ...linkStyleOverrides['fan'] };
 
     graph.resetCells([]);
 
     layoutGenogram({
-        graph, elements, persons, parentChildLinks, mateLinks, sizes: layoutSizes, linkStyle,
-        linkShapes: { ParentChildLink, MateLink, IdenticalLink },
+        graph,
+        elements,
+        persons: layoutPersons,
+        parentChildLinks,
+        mateLinks,
+        unions: data.unions,
+        sizes: layoutSizes,
+        linkShapes: { ParentChildLink, MateLink, UnionBox },
     });
 
-    applySymbolHighlighters(paper, persons);
+    applyPersonHighlighters(paper, data.persons);
 
-    familyTree = buildFamilyTree(persons, parentChildLinks);
-
+    paper.freeze();
+    paper.unfreeze();
     paper.transformToFitContent({
         padding: sizes.paperPadding,
-        verticalAlign: 'middle',
+        verticalAlign: 'top',
         horizontalAlign: 'middle',
         useModelGeometry: true,
     });
 }
 
-// --- Toggle link style and re-render ---
-function toggleLinkStyle(linkStyleOverride?: 'fan' | 'orthogonal') {
-    if (linkStyleOverride) {
-        linkStyle = linkStyleOverride;
-    } else {
-        linkStyle = linkStyle === 'fan' ? 'orthogonal' : 'fan';
+// ── Toolbar handlers ──────────────────────────────────────────────────────────
+
+document.getElementById('tree-title')!.addEventListener('input', (e) => {
+    const title = (e.target as HTMLInputElement).value;
+    if (!currentData.meta) currentData.meta = {};
+    currentData.meta.title = title;
+});
+
+document.getElementById('btn-new')!.addEventListener('click', () => {
+    if (currentData.persons.length > 0) {
+        if (!confirm('Start a new diagram? Unsaved changes will be lost.')) return;
     }
-    linkStyleToggle.textContent = linkStyle === 'fan' ? 'Orthogonal Link Style' : 'Fan Link Style';
-    renderDataset(select.value);
+    currentData = structuredClone(DEFAULT_FAMILY_DATA);
+    (document.getElementById('tree-title') as HTMLInputElement).value = '';
+    setEditorData(currentData);
+    render(currentData);
+});
+
+document.getElementById('btn-load')!.addEventListener('click', () => {
+    loadFile().then(data => {
+        currentData = data;
+        (document.getElementById('tree-title') as HTMLInputElement).value = data.meta?.title ?? '';
+        setEditorData(data);
+        render(data);
+    }).catch(() => {});
+});
+
+document.getElementById('btn-save')!.addEventListener('click', () => {
+    saveFile(currentData);
+});
+
+document.getElementById('btn-export-png')!.addEventListener('click', () => {
+    const name = currentData.meta?.title ?? 'genograph';
+    exportPng(paper, name);
+});
+
+document.getElementById('btn-add-person')!.addEventListener('click', () => {
+    addPerson();
+});
+
+document.getElementById('btn-add-union')!.addEventListener('click', () => {
+    addUnion();
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+function handleDataChange(data: FamilyData) {
+    currentData = data;
+    render(data);
 }
 
-// --- Dataset picker handler ---
-const select = document.getElementById('dataset-select') as HTMLSelectElement;
-select.addEventListener('change', () => renderDataset(select.value));
-
-// --- Link style toggle handler ---
-const linkStyleToggle = document.getElementById('link-style-toggle') as HTMLButtonElement;
-linkStyleToggle.addEventListener('click', () => toggleLinkStyle());
-
-// --- Initial render ---
-toggleLinkStyle('fan');
-
+initEditor(currentData, handleDataChange);
+render(currentData);

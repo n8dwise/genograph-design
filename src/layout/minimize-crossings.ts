@@ -1,6 +1,6 @@
 import type { dia } from '@joint/core';
 import type { graphlib } from '@dagrejs/dagre';
-import type { PersonNode, ParentChildLink } from '../data';
+import type { LayoutPersonNode as PersonNode, LayoutParentChildLink as ParentChildLink } from '../data';
 import type { DirectedGraph } from '@joint/layout-directed-graph';
 
 // Maximum barycenter sweep iterations. The barycenter heuristic for crossing
