@@ -9,21 +9,17 @@ export function createPersonElement(person: Person): dia.Element {
         person.sex === 'O' ? OtherPerson :
         UnknownPerson;
 
-    const el = new ShapeClass({
+    const nameText = person.age !== undefined
+        ? `${person.name || '(unnamed)'}, ${person.age}`
+        : (person.name || '(unnamed)');
+
+    return new ShapeClass({
         id: String(person.id),
         attrs: {
             root: { title: person.name },
-            name: { text: person.name || '(unnamed)' },
+            name: { text: nameText },
         },
     });
-
-    if (person.age !== undefined) {
-        el.attr('age/text', `age ${person.age}`);
-        el.attr('age/opacity', 1);
-        el.attr('name/y', 'calc(0.30*h)');
-    }
-
-    return el;
 }
 
 export function buildFamilyTree(
