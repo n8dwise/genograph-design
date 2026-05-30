@@ -1,12 +1,12 @@
 import { dia, shapes } from '@joint/core';
-import { MalePerson, FemalePerson, OtherPerson, UnknownPerson, ParentChildLink, MateLink } from './shapes';
+import { MalePerson, FemalePerson, OtherPerson, UnknownPerson, ParentChildLink, MateLink, BondLink } from './shapes';
 import { colors, sizes, linkStyleOverrides } from './theme';
-import { toLayoutPersonNodes, getParentChildLinks, getMateLinks, DEFAULT_FAMILY_DATA } from './data';
+import { toLayoutPersonNodes, getParentChildLinks, getMateLinks, DEFAULT_FAMILY_DATA, BOND_LABELS } from './data';
 import type { FamilyData } from './data';
 import { layoutGenogram } from './layout';
 import { applyPersonHighlighters } from './highlighters';
 import { createPersonElement } from './utils';
-import { initEditor, setEditorData, addPerson, addUnion } from './editor';
+import { initEditor, setEditorData, addPerson, addUnion, addBond } from './editor';
 import { saveFile, loadFile, exportPng } from './storage';
 import './styles.css';
 
@@ -14,7 +14,7 @@ import './styles.css';
 
 const cellNamespace = {
     ...shapes,
-    genogram: { MalePerson, FemalePerson, OtherPerson, UnknownPerson, ParentChildLink, MateLink },
+    genogram: { MalePerson, FemalePerson, OtherPerson, UnknownPerson, ParentChildLink, MateLink, BondLink },
 };
 
 const graph = new dia.Graph({}, { cellNamespace });
@@ -61,6 +61,24 @@ function render(data: FamilyData) {
     graph.resetCells([]);
     layoutGenogram({ graph, elements, persons: layoutPersons, parentChildLinks, mateLinks, unions: data.unions, sizes: layoutSizes, linkShapes: { ParentChildLink, MateLink } });
     applyPersonHighlighters(paper, data.persons);
+
+    // Render bonds (non-structural labeled connections)
+    const bondCells = (data.bonds ?? []).map(bond => {
+        const labelText = bond.type === 'other' && bond.label ? bond.label : BOND_LABELS[bond.type];
+        const link = new BondLink({
+            source: { id: String(bond.from) },
+            target: { id: String(bond.to) },
+        });
+        link.labels([{
+            position: { distance: 0.5 },
+            attrs: {
+                text: { text: labelText, fontSize: 10, fill: '#5b21b6', fontFamily: 'system-ui, sans-serif' },
+                rect: { fill: '#f5f3ff', stroke: '#c4b5fd', strokeWidth: 1, rx: 3, ry: 3 },
+            },
+        }]);
+        return link;
+    });
+    if (bondCells.length > 0) graph.addCells(bondCells);
 
     paper.freeze();
     paper.unfreeze();
@@ -156,6 +174,7 @@ document.getElementById('btn-export-png')!.addEventListener('click', () => {
 
 document.getElementById('btn-add-person')!.addEventListener('click', () => addPerson());
 document.getElementById('btn-add-union')!.addEventListener('click', () => addUnion());
+document.getElementById('btn-add-bond')!.addEventListener('click', () => addBond());
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 

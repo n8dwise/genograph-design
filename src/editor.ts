@@ -1,5 +1,5 @@
-import type { FamilyData, Person, Union, RelationshipQuality, UnionStatus, UnionType } from './data';
-import { nextPersonId, nextUnionId } from './data';
+import type { FamilyData, Person, Union, Bond, BondType, RelationshipQuality, UnionStatus, UnionType } from './data';
+import { nextPersonId, nextUnionId, nextBondId, BOND_LABELS } from './data';
 
 type ChangeCallback = (data: FamilyData) => void;
 
@@ -17,6 +17,7 @@ export function initEditor(data: FamilyData, onChange: ChangeCallback) {
     _openUnionId = null;
     renderPeopleList();
     renderUnionsList();
+    renderBondsList();
 }
 
 export function setEditorData(data: FamilyData) {
@@ -25,6 +26,7 @@ export function setEditorData(data: FamilyData) {
     _openUnionId = null;
     renderPeopleList();
     renderUnionsList();
+    renderBondsList();
 }
 
 // ── People ────────────────────────────────────────────────────────────────────
@@ -379,4 +381,130 @@ function deleteUnion(id: string) {
     if (_openUnionId === id) _openUnionId = null;
     _onChange(_data);
     renderUnionsList();
+}
+
+// ── Bonds ─────────────────────────────────────────────────────────────────────
+
+let _openBondId: string | null = null;
+
+export function renderBondsList() {
+    const list = document.getElementById('bonds-list')!;
+    list.innerHTML = '';
+
+    for (const bond of (_data.bonds ?? [])) {
+        const from = _data.persons.find(p => p.id === bond.from);
+        const to = _data.persons.find(p => p.id === bond.to);
+        const labelText = bond.type === 'other' && bond.label ? bond.label : BOND_LABELS[bond.type];
+        const display = `${from?.name || '?'} → ${to?.name || '?'}`;
+
+        const row = document.createElement('div');
+        row.className = 'list-item' + (bond.id === _openBondId ? ' active' : '');
+
+        const badge = document.createElement('span');
+        badge.className = 'list-item-badge';
+        badge.style.background = '#7c3aed';
+
+        const lbl = document.createElement('span');
+        lbl.className = 'list-item-label';
+        lbl.textContent = `${display} (${labelText})`;
+
+        const del = document.createElement('button');
+        del.className = 'btn-delete';
+        del.textContent = '✕';
+        del.addEventListener('click', e => { e.stopPropagation(); deleteBond(bond.id); });
+
+        row.append(badge, lbl, del);
+        row.addEventListener('click', () => {
+            _openBondId = _openBondId === bond.id ? null : bond.id;
+            _openPersonId = null;
+            _openUnionId = null;
+            renderPeopleList();
+            renderUnionsList();
+            renderBondsList();
+        });
+        list.appendChild(row);
+
+        if (bond.id === _openBondId) list.appendChild(buildBondForm(bond));
+    }
+}
+
+function buildBondForm(bond: Bond): HTMLElement {
+    const form = document.createElement('div');
+    form.className = 'edit-form';
+
+    const fromLabel = document.createElement('label'); fromLabel.textContent = 'From';
+    const fromSelect = buildPersonSelect(bond.from);
+    const toLabel = document.createElement('label'); toLabel.textContent = 'To';
+    const toSelect = buildPersonSelect(bond.to);
+
+    const typeLabel = document.createElement('label'); typeLabel.textContent = 'Connection type';
+    const typeSelect = document.createElement('select');
+    for (const [val, lbl] of Object.entries(BOND_LABELS) as Array<[BondType, string]>) {
+        const opt = document.createElement('option');
+        opt.value = val; opt.textContent = lbl;
+        if (bond.type === val) opt.selected = true;
+        typeSelect.appendChild(opt);
+    }
+
+    const customLabel = document.createElement('label'); customLabel.textContent = 'Custom label (if "Other")';
+    const customInput = document.createElement('input');
+    customInput.type = 'text';
+    customInput.value = bond.label ?? '';
+    customInput.placeholder = 'e.g. AA Sponsor';
+
+    const actions = document.createElement('div');
+    actions.className = 'form-actions';
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn-save-form'; saveBtn.textContent = 'Save';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn-cancel-form'; cancelBtn.textContent = 'Cancel';
+
+    saveBtn.addEventListener('click', () => {
+        const updated: Bond = {
+            ...bond,
+            from: Number(fromSelect.value),
+            to: Number(toSelect.value),
+            type: typeSelect.value as BondType,
+            label: customInput.value.trim() || undefined,
+        };
+        if (updated.from === updated.to) { alert('From and To must be different people.'); return; }
+        const idx = (_data.bonds ?? []).findIndex(b => b.id === bond.id);
+        if (idx !== -1) _data.bonds![idx] = updated;
+        _openBondId = null;
+        _onChange(_data);
+        renderBondsList();
+    });
+
+    cancelBtn.addEventListener('click', () => { _openBondId = null; renderBondsList(); });
+
+    actions.append(saveBtn, cancelBtn);
+    form.append(fromLabel, fromSelect, toLabel, toSelect, typeLabel, typeSelect, customLabel, customInput, actions);
+    return form;
+}
+
+export function addBond() {
+    if (_data.persons.length < 2) { alert('Add at least two people before creating a connection.'); return; }
+    if (!_data.bonds) _data.bonds = [];
+    const id = nextBondId(_data);
+    const bond: Bond = {
+        id,
+        from: _data.persons[0].id,
+        to: _data.persons[1].id,
+        type: 'important-adult',
+    };
+    _data.bonds.push(bond);
+    _openBondId = id;
+    _openPersonId = null;
+    _openUnionId = null;
+    _onChange(_data);
+    renderPeopleList();
+    renderUnionsList();
+    renderBondsList();
+}
+
+function deleteBond(id: string) {
+    _data.bonds = (_data.bonds ?? []).filter(b => b.id !== id);
+    if (_openBondId === id) _openBondId = null;
+    _onChange(_data);
+    renderBondsList();
 }

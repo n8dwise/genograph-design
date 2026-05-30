@@ -115,3 +115,21 @@ export class MateLink extends shapes.standard.Link {
         }, super.defaults);
     }
 }
+
+export class BondLink extends shapes.standard.Link {
+    defaults() {
+        return util.defaultsDeep({
+            type: 'genogram.BondLink',
+            z: defaultZIndex.person - 1,
+            connector: { name: 'smooth' },
+            attrs: {
+                line: {
+                    stroke: '#7c3aed',
+                    strokeWidth: 1.5,
+                    strokeDasharray: '6 3',
+                    targetMarker: null,
+                },
+            },
+        }, super.defaults);
+    }
+}

@@ -8,6 +8,30 @@ export interface Person {
     notes?: string;
 }
 
+export type BondType =
+    | 'guardian' | 'parent' | 'close-friend' | 'counselor'
+    | 'mentor' | 'caregiver' | 'sponsor' | 'important-adult' | 'other';
+
+export const BOND_LABELS: Record<BondType, string> = {
+    'guardian':       'Guardian',
+    'parent':         'Parent',
+    'close-friend':   'Close Friend',
+    'counselor':      'Counselor',
+    'mentor':         'Mentor',
+    'caregiver':      'Caregiver',
+    'sponsor':        'Sponsor',
+    'important-adult':'Important Adult',
+    'other':          'Other',
+};
+
+export interface Bond {
+    id: string;
+    from: number;
+    to: number;
+    type: BondType;
+    label?: string;
+}
+
 export type UnionType = 'married' | 'cohabiting' | 'affair' | 'unknown';
 export type UnionStatus = 'active' | 'separated' | 'divorced';
 export type RelationshipQuality = 'green' | 'yellow' | 'red';
@@ -28,6 +52,7 @@ export interface FamilyData {
     };
     persons: Person[];
     unions: Union[];
+    bonds?: Bond[];
 }
 
 // Internal types used by the layout engine
@@ -104,6 +129,13 @@ export function nextPersonId(data: FamilyData): number {
     return data.persons.length === 0
         ? 1
         : Math.max(...data.persons.map(p => p.id)) + 1;
+}
+
+export function nextBondId(data: FamilyData): string {
+    const nums = (data.bonds ?? [])
+        .map(b => parseInt(b.id.replace(/\D/g, ''), 10))
+        .filter(n => !isNaN(n));
+    return `b${nums.length === 0 ? 1 : Math.max(...nums) + 1}`;
 }
 
 export function nextUnionId(data: FamilyData): string {
