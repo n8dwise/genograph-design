@@ -2,8 +2,8 @@ export interface Person {
     id: number;
     name: string;
     sex: 'M' | 'F' | 'O' | '?';
-    dob?: string;
-    dod?: string;
+    age?: number;
+    deceased?: boolean;
     isIndexPerson?: boolean;
     notes?: string;
 }
@@ -35,8 +35,6 @@ export interface LayoutPersonNode {
     id: number;
     name: string;
     sex: 'M' | 'F' | '?';
-    dob?: string;
-    dod?: string;
     mother?: number;
     father?: number;
 }
@@ -76,8 +74,6 @@ export function toLayoutPersonNodes(data: FamilyData): LayoutPersonNode[] {
             id: p.id,
             name: p.name,
             sex: (p.sex === 'O' ? '?' : p.sex) as 'M' | 'F' | '?',
-            dob: p.dob,
-            dod: p.dod,
             mother,
             father,
         };
@@ -118,7 +114,7 @@ export function nextUnionId(data: FamilyData): string {
 }
 
 export const DEFAULT_FAMILY_DATA: FamilyData = {
-    meta: { title: 'New Family' },
+    meta: { title: '' },
     persons: [],
     unions: [],
 };

@@ -1,14 +1,11 @@
 export const sizes = {
-    symbolWidth: 50,
-    symbolHeight: 50,
+    symbolWidth: 90,
+    symbolHeight: 46,
     deceasedCrossInset: 5,
-    coupleGap: 70,
-    unionBoxWidth: 56,
-    unionBoxHeight: 26,
-    symbolGap: 30,
-    levelGap: 100,
+    coupleGap: 32,
+    symbolGap: 28,
+    levelGap: 90,
     paperPadding: 60,
-    nameWrapOverlap: 8,
     nameMargin: 6,
     nameMaxLineCount: 2,
 };
@@ -16,9 +13,9 @@ export const sizes = {
 export const linkStyleOverrides = {
     fan: {},
     orthogonal: {
-        coupleGap: 80,
-        levelGap: 120,
-        nameMaxLineCount: 4,
+        coupleGap: 44,
+        levelGap: 110,
+        nameMaxLineCount: 3,
     },
 } as const satisfies Record<string, Partial<typeof sizes>>;
 
@@ -26,7 +23,6 @@ export const defaultZIndex = {
     parentChildLink: 1,
     mateLink: 2,
     person: 3,
-    unionBox: 4,
     focusedOffset: 10,
 };
 
@@ -41,14 +37,10 @@ export const colors = {
     unknownFill: '#e5e7eb',
     unknownStroke: '#6b7280',
 
-    // Relationship quality (stoplight)
-    qualityGreenFill: '#dcfce7',
+    // Relationship quality (stoplight) — used for mate lines
     qualityGreenStroke: '#16a34a',
-    qualityYellowFill: '#fef9c3',
     qualityYellowStroke: '#ca8a04',
-    qualityRedFill: '#fee2e2',
     qualityRedStroke: '#dc2626',
-    qualityNeutralFill: '#f3f4f6',
     qualityNeutralStroke: '#9ca3af',
 
     // General
@@ -58,3 +50,12 @@ export const colors = {
     linkStroke: '#94a3b8',
     highlightStroke: '#e2e8f0',
 };
+
+export function qualityStrokeColor(quality?: 'green' | 'yellow' | 'red' | null): string {
+    switch (quality) {
+        case 'green':  return colors.qualityGreenStroke;
+        case 'yellow': return colors.qualityYellowStroke;
+        case 'red':    return colors.qualityRedStroke;
+        default:       return colors.qualityNeutralStroke;
+    }
+}

@@ -1,49 +1,22 @@
 {
   "meta": { "title": "Example Family" },
   "persons": [
-    { "id": 1, "name": "George Sr.", "sex": "M", "dob": "1945", "dod": "2010" },
-    { "id": 2, "name": "Alice Sr.", "sex": "F", "dob": "1948" },
-    { "id": 3, "name": "Robert", "sex": "M", "dob": "1970", "isIndexPerson": true },
-    { "id": 4, "name": "Susan", "sex": "F", "dob": "1972" },
-    { "id": 5, "name": "Linda", "sex": "F", "dob": "1968" },
-    { "id": 6, "name": "Karen", "sex": "F", "dob": "1975" },
-    { "id": 7, "name": "Emma", "sex": "F", "dob": "1995" },
-    { "id": 8, "name": "Jack", "sex": "M", "dob": "1998" },
-    { "id": 9, "name": "Tom", "sex": "M", "dob": "2005" },
-    { "id": 10, "name": "David", "sex": "M", "dob": "1969" },
-    { "id": 11, "name": "Lily", "sex": "F", "dob": "2000" }
+    { "id": 1, "name": "Robert", "sex": "M", "age": 54, "isIndexPerson": true },
+    { "id": 2, "name": "George Sr.", "sex": "M", "age": 79, "deceased": true },
+    { "id": 3, "name": "Alice Sr.", "sex": "F", "age": 76 },
+    { "id": 4, "name": "Susan", "sex": "F", "age": 52 },
+    { "id": 5, "name": "Linda", "sex": "F", "age": 56 },
+    { "id": 6, "name": "Karen", "sex": "F", "age": 49 },
+    { "id": 7, "name": "Emma", "sex": "F", "age": 29 },
+    { "id": 8, "name": "Jack", "sex": "M", "age": 26 },
+    { "id": 9, "name": "Tom", "sex": "M", "age": 19 },
+    { "id": 10, "name": "David", "sex": "M", "age": 55 },
+    { "id": 11, "name": "Lily", "sex": "F", "age": 24 }
   ],
   "unions": [
-    {
-      "id": "u1",
-      "partners": [1, 2],
-      "type": "married",
-      "status": "active",
-      "quality": "green",
-      "children": [3, 4]
-    },
-    {
-      "id": "u2",
-      "partners": [3, 5],
-      "type": "married",
-      "status": "divorced",
-      "quality": "red",
-      "children": [7, 8]
-    },
-    {
-      "id": "u3",
-      "partners": [3, 6],
-      "type": "married",
-      "status": "active",
-      "quality": "yellow",
-      "children": [9]
-    },
-    {
-      "id": "u4",
-      "partners": [4, 10],
-      "type": "cohabiting",
-      "status": "active",
-      "children": [11]
-    }
+    { "id": "u1", "partners": [2, 3], "type": "married", "status": "active", "quality": "green", "children": [1, 4] },
+    { "id": "u2", "partners": [1, 5], "type": "married", "status": "divorced", "quality": "red", "children": [7, 8] },
+    { "id": "u3", "partners": [1, 6], "type": "married", "status": "active", "quality": "yellow", "children": [9] },
+    { "id": "u4", "partners": [4, 10], "type": "cohabiting", "status": "active", "children": [11] }
   ]
 }

@@ -1,12 +1,9 @@
-import type {
-    FamilyData, Person, Union,
-    RelationshipQuality, UnionStatus, UnionType,
-} from './data';
+import type { FamilyData, Person, Union, RelationshipQuality, UnionStatus, UnionType } from './data';
 import { nextPersonId, nextUnionId } from './data';
 
 type ChangeCallback = (data: FamilyData) => void;
 
-// ── State ────────────────────────────────────────────────────────────────────
+// ── State ─────────────────────────────────────────────────────────────────────
 
 let _data: FamilyData = { persons: [], unions: [] };
 let _onChange: ChangeCallback = () => {};
@@ -36,7 +33,15 @@ function renderPeopleList() {
     const list = document.getElementById('people-list')!;
     list.innerHTML = '';
 
-    for (const person of _data.persons) {
+    // Primary subject always first
+    const sorted = [..._data.persons].sort((a, b) => {
+        if (a.isIndexPerson) return -1;
+        if (b.isIndexPerson) return 1;
+        return 0;
+    });
+
+    for (const person of sorted) {
+        const isPrimary = !!person.isIndexPerson;
         const row = document.createElement('div');
         row.className = 'list-item' + (person.id === _openPersonId ? ' active' : '');
 
@@ -46,18 +51,20 @@ function renderPeopleList() {
         const label = document.createElement('span');
         label.className = 'list-item-label';
         label.textContent = person.name || '(unnamed)';
-        if (person.isIndexPerson) label.textContent += ' ★';
+        if (isPrimary) label.textContent += ' ★';
+        if (person.deceased) label.style.textDecoration = 'line-through';
 
-        const del = document.createElement('button');
-        del.className = 'btn-delete';
-        del.textContent = '✕';
-        del.title = 'Remove person';
-        del.addEventListener('click', (e) => {
-            e.stopPropagation();
-            deletePerson(person.id);
-        });
+        row.append(badge, label);
 
-        row.append(badge, label, del);
+        if (!isPrimary) {
+            const del = document.createElement('button');
+            del.className = 'btn-delete';
+            del.textContent = '✕';
+            del.title = 'Remove person';
+            del.addEventListener('click', e => { e.stopPropagation(); deletePerson(person.id); });
+            row.appendChild(del);
+        }
+
         row.addEventListener('click', () => togglePersonForm(person.id));
         list.appendChild(row);
 
@@ -75,12 +82,13 @@ function togglePersonForm(id: number) {
 }
 
 function buildPersonForm(person: Person): HTMLElement {
+    const isPrimary = !!person.isIndexPerson;
     const form = document.createElement('div');
     form.className = 'edit-form';
 
     // Name
     const nameLabel = document.createElement('label');
-    nameLabel.textContent = 'Name';
+    nameLabel.textContent = isPrimary ? 'Name (primary subject)' : 'Name';
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
     nameInput.value = person.name;
@@ -111,31 +119,22 @@ function buildPersonForm(person: Person): HTMLElement {
         sexOptions.appendChild(btn);
     }
 
-    // DOB
-    const dobLabel = document.createElement('label');
-    dobLabel.textContent = 'Year of birth (optional)';
-    const dobInput = document.createElement('input');
-    dobInput.type = 'text';
-    dobInput.value = person.dob ?? '';
-    dobInput.placeholder = 'e.g. 1975';
-    dobInput.maxLength = 4;
+    // Age
+    const ageLabel = document.createElement('label');
+    ageLabel.textContent = 'Age (optional)';
+    const ageInput = document.createElement('input');
+    ageInput.type = 'text';
+    ageInput.value = person.age !== undefined ? String(person.age) : '';
+    ageInput.placeholder = 'e.g. 45';
+    ageInput.maxLength = 3;
 
     // Deceased
-    const dodLabel = document.createElement('label');
-    dodLabel.textContent = 'Year of death (leave blank if living)';
-    const dodInput = document.createElement('input');
-    dodInput.type = 'text';
-    dodInput.value = person.dod ?? '';
-    dodInput.placeholder = 'e.g. 2020';
-    dodInput.maxLength = 4;
-
-    // Index person
-    const indexRow = document.createElement('label');
-    indexRow.className = 'checkbox-row';
-    const indexCheck = document.createElement('input');
-    indexCheck.type = 'checkbox';
-    indexCheck.checked = !!person.isIndexPerson;
-    indexRow.append(indexCheck, document.createTextNode('Index person (identified patient)'));
+    const deceasedRow = document.createElement('label');
+    deceasedRow.className = 'checkbox-row';
+    const deceasedCheck = document.createElement('input');
+    deceasedCheck.type = 'checkbox';
+    deceasedCheck.checked = !!person.deceased;
+    deceasedRow.append(deceasedCheck, document.createTextNode('Deceased'));
 
     // Buttons
     const actions = document.createElement('div');
@@ -148,13 +147,13 @@ function buildPersonForm(person: Person): HTMLElement {
     cancelBtn.textContent = 'Cancel';
 
     saveBtn.addEventListener('click', () => {
+        const ageVal = parseInt(ageInput.value.trim(), 10);
         const updated: Person = {
             ...person,
             name: nameInput.value.trim() || '(unnamed)',
             sex: currentSex,
-            dob: dobInput.value.trim() || undefined,
-            dod: dodInput.value.trim() || undefined,
-            isIndexPerson: indexCheck.checked || undefined,
+            age: isNaN(ageVal) ? undefined : ageVal,
+            deceased: deceasedCheck.checked || undefined,
         };
         const idx = _data.persons.findIndex(p => p.id === person.id);
         if (idx !== -1) _data.persons[idx] = updated;
@@ -163,13 +162,10 @@ function buildPersonForm(person: Person): HTMLElement {
         renderPeopleList();
     });
 
-    cancelBtn.addEventListener('click', () => {
-        _openPersonId = null;
-        renderPeopleList();
-    });
+    cancelBtn.addEventListener('click', () => { _openPersonId = null; renderPeopleList(); });
 
     actions.append(saveBtn, cancelBtn);
-    form.append(nameLabel, nameInput, sexLabel, sexOptions, dobLabel, dobInput, dodLabel, dodInput, indexRow, actions);
+    form.append(nameLabel, nameInput, sexLabel, sexOptions, ageLabel, ageInput, deceasedRow, actions);
     return form;
 }
 
@@ -185,11 +181,7 @@ export function addPerson() {
 
 function deletePerson(id: number) {
     _data.persons = _data.persons.filter(p => p.id !== id);
-    // Remove from any unions
-    for (const u of _data.unions) {
-        u.children = (u.children ?? []).filter(c => c !== id);
-    }
-    // Remove unions where this person was a partner
+    for (const u of _data.unions) u.children = (u.children ?? []).filter(c => c !== id);
     _data.unions = _data.unions.filter(u => !u.partners.includes(id));
     if (_openPersonId === id) _openPersonId = null;
     _onChange(_data);
@@ -218,26 +210,18 @@ function renderUnionsList() {
         const lbl = document.createElement('span');
         lbl.className = 'list-item-label';
         lbl.textContent = label;
-        if (union.status && union.status !== 'active') {
-            lbl.textContent += ` (${union.status})`;
-        }
+        if (union.status && union.status !== 'active') lbl.textContent += ` (${union.status})`;
 
         const del = document.createElement('button');
         del.className = 'btn-delete';
         del.textContent = '✕';
-        del.title = 'Remove relationship';
-        del.addEventListener('click', (e) => {
-            e.stopPropagation();
-            deleteUnion(union.id);
-        });
+        del.addEventListener('click', e => { e.stopPropagation(); deleteUnion(union.id); });
 
         row.append(badge, lbl, del);
         row.addEventListener('click', () => toggleUnionForm(union.id));
         list.appendChild(row);
 
-        if (union.id === _openUnionId) {
-            list.appendChild(buildUnionForm(union));
-        }
+        if (union.id === _openUnionId) list.appendChild(buildUnionForm(union));
     }
 }
 
@@ -252,83 +236,63 @@ function buildUnionForm(union: Union): HTMLElement {
     const form = document.createElement('div');
     form.className = 'edit-form';
 
-    // Partner A
-    const p0Label = document.createElement('label');
-    p0Label.textContent = 'Partner 1';
+    const p0Label = document.createElement('label'); p0Label.textContent = 'Partner 1';
     const p0Select = buildPersonSelect(union.partners[0]);
-
-    // Partner B
-    const p1Label = document.createElement('label');
-    p1Label.textContent = 'Partner 2';
+    const p1Label = document.createElement('label'); p1Label.textContent = 'Partner 2';
     const p1Select = buildPersonSelect(union.partners[1]);
 
-    // Relationship type
-    const typeLabel = document.createElement('label');
-    typeLabel.textContent = 'Type';
+    const typeLabel = document.createElement('label'); typeLabel.textContent = 'Type';
     const typeSelect = document.createElement('select');
     const typeOptions: Array<[UnionType, string]> = [
-        ['married', 'Married'],
-        ['cohabiting', 'Cohabiting / Partnered'],
-        ['affair', 'Affair'],
-        ['unknown', 'Unknown'],
+        ['married', 'Married'], ['cohabiting', 'Cohabiting / Partnered'],
+        ['affair', 'Affair'], ['unknown', 'Unknown'],
     ];
     for (const [val, lbl] of typeOptions) {
         const opt = document.createElement('option');
-        opt.value = val;
-        opt.textContent = lbl;
+        opt.value = val; opt.textContent = lbl;
         if ((union.type ?? 'married') === val) opt.selected = true;
         typeSelect.appendChild(opt);
     }
 
-    // Status
-    const statusLabel = document.createElement('label');
-    statusLabel.textContent = 'Status';
+    const statusLabel = document.createElement('label'); statusLabel.textContent = 'Status';
     const statusSelect = document.createElement('select');
     const statusOptions: Array<[UnionStatus, string]> = [
-        ['active', 'Active / Together'],
-        ['separated', 'Separated'],
-        ['divorced', 'Divorced'],
+        ['active', 'Active / Together'], ['separated', 'Separated'], ['divorced', 'Divorced'],
     ];
     for (const [val, lbl] of statusOptions) {
         const opt = document.createElement('option');
-        opt.value = val;
-        opt.textContent = lbl;
+        opt.value = val; opt.textContent = lbl;
         if ((union.status ?? 'active') === val) opt.selected = true;
         statusSelect.appendChild(opt);
     }
 
-    // Quality
-    const qualityLabel = document.createElement('label');
-    qualityLabel.textContent = 'Relationship quality';
+    const qualityLabel = document.createElement('label'); qualityLabel.textContent = 'Relationship quality';
     const qualityOptions = document.createElement('div');
     qualityOptions.className = 'quality-options';
     const qualityValues: Array<[RelationshipQuality | null, string]> = [
-        ['green', '🟢'], ['yellow', '🟡'], ['red', '🔴'], [null, '—'],
+        ['green', '🟢 Good'], ['yellow', '🟡 Strained'], ['red', '🔴 Conflicted'], [null, '— None'],
     ];
     let currentQuality: RelationshipQuality | null = union.quality ?? null;
     const qualityBtns: HTMLButtonElement[] = [];
     for (const [val, lbl] of qualityValues) {
         const btn = document.createElement('button');
         btn.type = 'button';
-        const activeKey = val === null ? 'none' : val;
-        btn.className = `quality-btn${currentQuality === val ? ` active-${activeKey}` : ''}`;
+        const ak = val === null ? 'none' : val;
+        btn.className = `quality-btn${currentQuality === val ? ` active-${ak}` : ''}`;
         btn.textContent = lbl;
         btn.dataset.val = val ?? '__none__';
         btn.addEventListener('click', () => {
             currentQuality = val;
             qualityBtns.forEach(b => {
                 const v = b.dataset.val === '__none__' ? null : b.dataset.val as RelationshipQuality;
-                const ak = v === null ? 'none' : v;
-                b.className = `quality-btn${v === currentQuality ? ` active-${ak}` : ''}`;
+                b.className = `quality-btn${v === currentQuality ? ` active-${v === null ? 'none' : v}` : ''}`;
             });
         });
         qualityBtns.push(btn);
         qualityOptions.appendChild(btn);
     }
 
-    // Children multi-select
-    const childLabel = document.createElement('label');
-    childLabel.textContent = 'Children';
+    const childLabel = document.createElement('label'); childLabel.textContent = 'Children';
     const childSelect = document.createElement('select');
     childSelect.multiple = true;
     childSelect.style.height = '80px';
@@ -342,35 +306,27 @@ function buildUnionForm(union: Union): HTMLElement {
         if (currentChildren.has(p.id)) opt.selected = true;
         childSelect.appendChild(opt);
     }
-
     const childHint = document.createElement('label');
     childHint.textContent = 'Hold Ctrl/Cmd to select multiple';
-    childHint.style.fontSize = '10px';
-    childHint.style.color = '#94a3b8';
+    childHint.style.cssText = 'font-size:10px;color:#94a3b8;';
 
-    // Buttons
     const actions = document.createElement('div');
     actions.className = 'form-actions';
     const saveBtn = document.createElement('button');
-    saveBtn.className = 'btn-save-form';
-    saveBtn.textContent = 'Save';
+    saveBtn.className = 'btn-save-form'; saveBtn.textContent = 'Save';
     const cancelBtn = document.createElement('button');
-    cancelBtn.className = 'btn-cancel-form';
-    cancelBtn.textContent = 'Cancel';
+    cancelBtn.className = 'btn-cancel-form'; cancelBtn.textContent = 'Cancel';
 
     saveBtn.addEventListener('click', () => {
         const p0Id = Number(p0Select.value);
         const p1Id = Number(p1Select.value);
         if (p0Id === p1Id) { alert('Partners must be different people.'); return; }
-
         const children = Array.from(childSelect.selectedOptions).map(o => Number(o.value));
         const updated: Union = {
-            ...union,
-            partners: [p0Id, p1Id],
+            ...union, partners: [p0Id, p1Id],
             type: typeSelect.value as UnionType,
             status: statusSelect.value as UnionStatus,
-            quality: currentQuality ?? undefined,
-            children,
+            quality: currentQuality ?? undefined, children,
         };
         const idx = _data.unions.findIndex(u => u.id === union.id);
         if (idx !== -1) _data.unions[idx] = updated;
@@ -379,20 +335,14 @@ function buildUnionForm(union: Union): HTMLElement {
         renderUnionsList();
     });
 
-    cancelBtn.addEventListener('click', () => {
-        _openUnionId = null;
-        renderUnionsList();
-    });
+    cancelBtn.addEventListener('click', () => { _openUnionId = null; renderUnionsList(); });
 
     actions.append(saveBtn, cancelBtn);
     form.append(
-        p0Label, p0Select,
-        p1Label, p1Select,
-        typeLabel, typeSelect,
-        statusLabel, statusSelect,
+        p0Label, p0Select, p1Label, p1Select,
+        typeLabel, typeSelect, statusLabel, statusSelect,
         qualityLabel, qualityOptions,
-        childLabel, childSelect, childHint,
-        actions,
+        childLabel, childSelect, childHint, actions,
     );
     return form;
 }
@@ -402,7 +352,7 @@ function buildPersonSelect(selectedId: number): HTMLSelectElement {
     for (const p of _data.persons) {
         const opt = document.createElement('option');
         opt.value = String(p.id);
-        opt.textContent = p.name || '(unnamed)';
+        opt.textContent = (p.name || '(unnamed)') + (p.isIndexPerson ? ' ★' : '');
         if (p.id === selectedId) opt.selected = true;
         sel.appendChild(opt);
     }
@@ -410,17 +360,11 @@ function buildPersonSelect(selectedId: number): HTMLSelectElement {
 }
 
 export function addUnion() {
-    if (_data.persons.length < 2) {
-        alert('Add at least two people before creating a relationship.');
-        return;
-    }
+    if (_data.persons.length < 2) { alert('Add at least two people before creating a relationship.'); return; }
     const id = nextUnionId(_data);
     const union: Union = {
-        id,
-        partners: [_data.persons[0].id, _data.persons[1].id],
-        type: 'married',
-        status: 'active',
-        children: [],
+        id, partners: [_data.persons[0].id, _data.persons[1].id],
+        type: 'married', status: 'active', children: [],
     };
     _data.unions.push(union);
     _openUnionId = id;

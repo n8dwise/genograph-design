@@ -212,8 +212,9 @@ body {
 .edit-form select:focus { border-color: #2563eb; }
 
 .sex-options, .quality-options {
-    display: flex;
-    gap: 6px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
 }
 
 .sex-btn, .quality-btn {
@@ -298,13 +299,77 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    pointer-events: none;
     color: #94a3b8;
     font-size: 14px;
     text-align: center;
     line-height: 1.6;
 }
 #diagram-empty.hidden { display: none; }
+
+/* ── Primary subject setup screen ── */
+#setup-box {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 28px 32px;
+    width: 340px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    text-align: left;
+    pointer-events: all;
+}
+
+#setup-box h2 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 6px;
+}
+
+#setup-box p {
+    font-size: 12px;
+    color: #64748b;
+    margin-bottom: 18px;
+    line-height: 1.5;
+}
+
+.setup-field {
+    margin-bottom: 14px;
+}
+
+.setup-field label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 5px;
+}
+
+.setup-field input[type="text"] {
+    width: 100%;
+    padding: 7px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    font-size: 13px;
+    outline: none;
+    color: #111827;
+}
+.setup-field input[type="text"]:focus { border-color: #2563eb; }
+
+#setup-start {
+    width: 100%;
+    padding: 9px;
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 6px;
+}
+#setup-start:hover { background: #1d4ed8; }
 
 /* ── JointJS overrides ── */
 .joint-paper { border: none !important; outline: none !important; }

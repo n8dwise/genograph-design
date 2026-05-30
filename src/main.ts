@@ -1,12 +1,7 @@
 import { dia, shapes } from '@joint/core';
-import {
-    MalePerson, FemalePerson, OtherPerson, UnknownPerson,
-    ParentChildLink, MateLink, UnionBox,
-} from './shapes';
+import { MalePerson, FemalePerson, OtherPerson, UnknownPerson, ParentChildLink, MateLink } from './shapes';
 import { colors, sizes, linkStyleOverrides } from './theme';
-import {
-    toLayoutPersonNodes, getParentChildLinks, getMateLinks, DEFAULT_FAMILY_DATA,
-} from './data';
+import { toLayoutPersonNodes, getParentChildLinks, getMateLinks, DEFAULT_FAMILY_DATA } from './data';
 import type { FamilyData } from './data';
 import { layoutGenogram } from './layout';
 import { applyPersonHighlighters } from './highlighters';
@@ -19,10 +14,7 @@ import './styles.css';
 
 const cellNamespace = {
     ...shapes,
-    genogram: {
-        MalePerson, FemalePerson, OtherPerson, UnknownPerson,
-        ParentChildLink, MateLink, UnionBox,
-    },
+    genogram: { MalePerson, FemalePerson, OtherPerson, UnknownPerson, ParentChildLink, MateLink },
 };
 
 const graph = new dia.Graph({}, { cellNamespace });
@@ -51,7 +43,6 @@ let currentData: FamilyData = structuredClone(DEFAULT_FAMILY_DATA);
 
 function render(data: FamilyData) {
     currentData = data;
-
     const empty = document.getElementById('diagram-empty')!;
 
     if (data.persons.length === 0) {
@@ -68,46 +59,84 @@ function render(data: FamilyData) {
     const layoutSizes = { ...sizes, ...linkStyleOverrides['fan'] };
 
     graph.resetCells([]);
-
-    layoutGenogram({
-        graph,
-        elements,
-        persons: layoutPersons,
-        parentChildLinks,
-        mateLinks,
-        unions: data.unions,
-        sizes: layoutSizes,
-        linkShapes: { ParentChildLink, MateLink, UnionBox },
-    });
-
+    layoutGenogram({ graph, elements, persons: layoutPersons, parentChildLinks, mateLinks, unions: data.unions, sizes: layoutSizes, linkShapes: { ParentChildLink, MateLink } });
     applyPersonHighlighters(paper, data.persons);
 
     paper.freeze();
     paper.unfreeze();
-    paper.transformToFitContent({
-        padding: sizes.paperPadding,
-        verticalAlign: 'top',
-        horizontalAlign: 'middle',
-        useModelGeometry: true,
+    paper.transformToFitContent({ padding: sizes.paperPadding, verticalAlign: 'top', horizontalAlign: 'middle', useModelGeometry: true });
+}
+
+function handleDataChange(data: FamilyData) {
+    currentData = data;
+    render(data);
+}
+
+// ── Primary subject setup ─────────────────────────────────────────────────────
+
+function showSetupScreen() {
+    const empty = document.getElementById('diagram-empty')!;
+    empty.classList.remove('hidden');
+    empty.innerHTML = `
+        <div id="setup-box">
+            <h2>Who is the primary subject?</h2>
+            <p>This person will be the focus of the diagram.<br>Everyone else is added in relation to them.</p>
+            <div class="setup-field">
+                <label>Name</label>
+                <input id="setup-name" type="text" placeholder="Full name" autocomplete="off" />
+            </div>
+            <div class="setup-field">
+                <label>Gender</label>
+                <div class="sex-options" id="setup-sex-options">
+                    <button class="sex-btn active-M" data-val="M">Male</button>
+                    <button class="sex-btn" data-val="F">Female</button>
+                    <button class="sex-btn" data-val="O">Other</button>
+                    <button class="sex-btn" data-val="?">?</button>
+                </div>
+            </div>
+            <button id="setup-start">Start Diagram</button>
+        </div>
+    `;
+
+    let selectedSex: 'M' | 'F' | 'O' | '?' = 'M';
+    const sexBtns = empty.querySelectorAll<HTMLButtonElement>('.sex-btn');
+    sexBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            selectedSex = btn.dataset.val as typeof selectedSex;
+            sexBtns.forEach(b => {
+                const v = b.dataset.val!;
+                b.className = `sex-btn${v === selectedSex ? ` active-${v === '?' ? 'unknown' : v}` : ''}`;
+            });
+        });
     });
+
+    empty.querySelector('#setup-start')!.addEventListener('click', () => {
+        const name = (empty.querySelector('#setup-name') as HTMLInputElement).value.trim();
+        if (!name) { (empty.querySelector('#setup-name') as HTMLInputElement).focus(); return; }
+        currentData.persons.push({ id: 1, name, sex: selectedSex, isIndexPerson: true });
+        empty.innerHTML = '<p>Add people and relationships<br>to see the diagram.</p>';
+        setEditorData(currentData);
+        render(currentData);
+    });
+
+    (empty.querySelector('#setup-name') as HTMLInputElement).focus();
 }
 
 // ── Toolbar handlers ──────────────────────────────────────────────────────────
 
-document.getElementById('tree-title')!.addEventListener('input', (e) => {
+document.getElementById('tree-title')!.addEventListener('input', e => {
     const title = (e.target as HTMLInputElement).value;
     if (!currentData.meta) currentData.meta = {};
     currentData.meta.title = title;
 });
 
 document.getElementById('btn-new')!.addEventListener('click', () => {
-    if (currentData.persons.length > 0) {
-        if (!confirm('Start a new diagram? Unsaved changes will be lost.')) return;
-    }
+    if (currentData.persons.length > 0 && !confirm('Start a new diagram? Unsaved changes will be lost.')) return;
     currentData = structuredClone(DEFAULT_FAMILY_DATA);
     (document.getElementById('tree-title') as HTMLInputElement).value = '';
     setEditorData(currentData);
-    render(currentData);
+    graph.resetCells([]);
+    showSetupScreen();
 });
 
 document.getElementById('btn-load')!.addEventListener('click', () => {
@@ -119,29 +148,16 @@ document.getElementById('btn-load')!.addEventListener('click', () => {
     }).catch(() => {});
 });
 
-document.getElementById('btn-save')!.addEventListener('click', () => {
-    saveFile(currentData);
-});
+document.getElementById('btn-save')!.addEventListener('click', () => saveFile(currentData));
 
 document.getElementById('btn-export-png')!.addEventListener('click', () => {
-    const name = currentData.meta?.title ?? 'genograph';
-    exportPng(paper, name);
+    exportPng(paper, currentData.meta?.title ?? 'genograph');
 });
 
-document.getElementById('btn-add-person')!.addEventListener('click', () => {
-    addPerson();
-});
-
-document.getElementById('btn-add-union')!.addEventListener('click', () => {
-    addUnion();
-});
+document.getElementById('btn-add-person')!.addEventListener('click', () => addPerson());
+document.getElementById('btn-add-union')!.addEventListener('click', () => addUnion());
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
-function handleDataChange(data: FamilyData) {
-    currentData = data;
-    render(data);
-}
-
 initEditor(currentData, handleDataChange);
-render(currentData);
+showSetupScreen();

@@ -2,26 +2,23 @@ import { dia } from '@joint/core';
 import { colors, sizes } from './theme';
 import type { Person } from './data';
 
-const { deceasedCrossInset } = sizes;
-
 class DeceasedHighlighter extends dia.HighlighterView {
     preinitialize() {
         this.tagName = 'path';
         this.attributes = {
             stroke: colors.dark,
-            strokeWidth: 2.5,
+            strokeWidth: 2,
             strokeLinecap: 'round',
             fill: 'none',
+            opacity: '0.6',
         };
     }
 
     protected highlight(elementView: dia.ElementView<dia.Element>) {
         const { width, height } = elementView.model.size();
-        const p = deceasedCrossInset;
-        this.el.setAttribute(
-            'd',
-            `M ${p} ${p} L ${width - p} ${height - p} M ${width - p} ${p} L ${p} ${height - p}`,
-        );
+        const p = sizes.deceasedCrossInset;
+        this.el.setAttribute('d',
+            `M ${p} ${p} L ${width - p} ${height - p} M ${width - p} ${p} L ${p} ${height - p}`);
     }
 }
 
@@ -32,8 +29,8 @@ class IndexPersonHighlighter extends dia.HighlighterView {
             stroke: colors.dark,
             strokeWidth: 3,
             fill: 'none',
-            rx: '4',
-            ry: '4',
+            rx: '6',
+            ry: '6',
         };
     }
 
@@ -47,18 +44,15 @@ class IndexPersonHighlighter extends dia.HighlighterView {
     }
 }
 
-const DECEASED_ID = 'deceased-cross';
-const INDEX_ID = 'index-person';
-
 export function applyPersonHighlighters(paper: dia.Paper, persons: Person[]) {
     for (const person of persons) {
         const view = paper.findViewByModel(String(person.id));
         if (!view) continue;
-        if (person.dod) {
-            DeceasedHighlighter.add(view, 'body', DECEASED_ID, { z: 5 });
+        if (person.deceased) {
+            DeceasedHighlighter.add(view, 'body', 'deceased-cross', { z: 5 });
         }
         if (person.isIndexPerson) {
-            IndexPersonHighlighter.add(view, 'body', INDEX_ID, { z: 5 });
+            IndexPersonHighlighter.add(view, 'body', 'index-person', { z: 5 });
         }
     }
 }
