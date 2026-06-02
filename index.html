@@ -12,6 +12,7 @@
             <input id="tree-title" type="text" placeholder="Family name…" autocomplete="off" />
             <div class="toolbar-actions">
                 <button id="btn-new" title="New diagram">New</button>
+                <button id="btn-sample" title="Load sample family">Sample</button>
                 <button id="btn-load" title="Load JSON file">Load</button>
                 <button id="btn-save" title="Save as JSON">Save</button>
                 <button id="btn-export-png" title="Export diagram as PNG">Export PNG</button>
@@ -37,6 +38,14 @@
                     <div id="unions-list"></div>
                 </section>
 
+                <section class="editor-section" id="family-relations-section">
+                    <div class="section-header">
+                        <h3>Family Relations</h3>
+                        <button id="btn-add-family-relation" class="btn-add" title="Add family relation">+ Add</button>
+                    </div>
+                    <div id="family-relations-list"></div>
+                </section>
+
                 <section class="editor-section" id="bonds-section">
                     <div class="section-header">
                         <h3>Connections</h3>
@@ -50,6 +59,17 @@
                 <div id="paper-container"></div>
                 <div id="diagram-empty">
                     <p>Add people and relationships<br>to see the diagram.</p>
+                </div>
+                <div id="legend">
+                    <div class="legend-title">Relationship Quality</div>
+                    <div class="legend-row"><span class="legend-swatch" style="background:#9ca3af"></span> Unknown</div>
+                    <div class="legend-row"><span class="legend-swatch" style="background:#16a34a"></span> Good</div>
+                    <div class="legend-row"><span class="legend-swatch" style="background:#ca8a04"></span> Strained</div>
+                    <div class="legend-row"><span class="legend-swatch" style="background:#dc2626"></span> Conflicted</div>
+                    <div class="legend-divider"></div>
+                    <div class="legend-row"><span class="legend-line-solid"></span> Active</div>
+                    <div class="legend-row"><span class="legend-line-dashed"></span> Separated / Divorced</div>
+                    <div class="legend-row"><span class="legend-line-support"></span> Support</div>
                 </div>
             </div>
         </div>

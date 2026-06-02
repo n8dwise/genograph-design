@@ -1,5 +1,5 @@
-import type { FamilyData, Person, Union, Bond, BondType, RelationshipQuality, UnionStatus, UnionType } from './data';
-import { nextPersonId, nextUnionId, nextBondId, BOND_LABELS } from './data';
+import type { FamilyData, Person, Union, Bond, BondType, FamilyRelation, FamilyRelationType, RelationshipQuality, UnionStatus, UnionType } from './data';
+import { nextPersonId, nextUnionId, nextBondId, nextFamilyRelationId, BOND_LABELS, FAMILY_RELATION_LABELS } from './data';
 
 type ChangeCallback = (data: FamilyData) => void;
 
@@ -9,14 +9,17 @@ let _data: FamilyData = { persons: [], unions: [] };
 let _onChange: ChangeCallback = () => {};
 let _openPersonId: number | null = null;
 let _openUnionId: string | null = null;
+let _openFamilyRelationId: string | null = null;
 
 export function initEditor(data: FamilyData, onChange: ChangeCallback) {
     _data = data;
     _onChange = onChange;
     _openPersonId = null;
     _openUnionId = null;
+    _openFamilyRelationId = null;
     renderPeopleList();
     renderUnionsList();
+    renderFamilyRelationsList();
     renderBondsList();
 }
 
@@ -24,8 +27,10 @@ export function setEditorData(data: FamilyData) {
     _data = data;
     _openPersonId = null;
     _openUnionId = null;
+    _openFamilyRelationId = null;
     renderPeopleList();
     renderUnionsList();
+    renderFamilyRelationsList();
     renderBondsList();
 }
 
@@ -383,6 +388,156 @@ function deleteUnion(id: string) {
     renderUnionsList();
 }
 
+// ── Family Relations ──────────────────────────────────────────────────────────
+
+export function renderFamilyRelationsList() {
+    const list = document.getElementById('family-relations-list')!;
+    list.innerHTML = '';
+
+    for (const rel of (_data.familyRelations ?? [])) {
+        const from = _data.persons.find(p => p.id === rel.from);
+        const to = _data.persons.find(p => p.id === rel.to);
+        const labelText = FAMILY_RELATION_LABELS[rel.type];
+
+        const row = document.createElement('div');
+        row.className = 'list-item' + (rel.id === _openFamilyRelationId ? ' active' : '');
+
+        const badge = document.createElement('span');
+        badge.className = 'list-item-badge family-relation-badge';
+
+        const lbl = document.createElement('span');
+        lbl.className = 'list-item-label';
+        lbl.textContent = `${from?.name || '?'} is ${labelText} of ${to?.name || '?'}`;
+
+        const del = document.createElement('button');
+        del.className = 'btn-delete';
+        del.textContent = '✕';
+        del.addEventListener('click', e => { e.stopPropagation(); deleteFamilyRelation(rel.id); });
+
+        row.append(badge, lbl, del);
+        row.addEventListener('click', () => {
+            _openFamilyRelationId = _openFamilyRelationId === rel.id ? null : rel.id;
+            _openPersonId = null;
+            _openUnionId = null;
+            _openBondId = null;
+            renderPeopleList();
+            renderUnionsList();
+            renderFamilyRelationsList();
+            renderBondsList();
+        });
+        list.appendChild(row);
+
+        if (rel.id === _openFamilyRelationId) list.appendChild(buildFamilyRelationForm(rel));
+    }
+}
+
+function buildFamilyRelationForm(rel: FamilyRelation): HTMLElement {
+    const form = document.createElement('div');
+    form.className = 'edit-form';
+
+    // Form reads: "[Person] is a [type] of [Other person]"
+    const personLabel = document.createElement('label'); personLabel.textContent = 'Person';
+    const fromSelect = buildPersonSelect(rel.from);
+
+    const typeLabel = document.createElement('label'); typeLabel.textContent = 'is a…';
+    const typeSelect = document.createElement('select');
+    for (const [val, lbl] of Object.entries(FAMILY_RELATION_LABELS) as Array<[FamilyRelationType, string]>) {
+        const opt = document.createElement('option');
+        opt.value = val; opt.textContent = lbl;
+        if (rel.type === val) opt.selected = true;
+        typeSelect.appendChild(opt);
+    }
+
+    const ofLabel = document.createElement('label'); ofLabel.textContent = 'of…';
+    const toSelect = buildPersonSelect(rel.to);
+
+    const qualityLabel = document.createElement('label'); qualityLabel.textContent = 'Relationship quality';
+    const qualityOptions = document.createElement('div');
+    qualityOptions.className = 'quality-options';
+    const qualityValues: Array<[RelationshipQuality | null, string]> = [
+        ['green', '🟢 Good'], ['yellow', '🟡 Strained'], ['red', '🔴 Conflicted'], [null, '— None'],
+    ];
+    let currentQuality: RelationshipQuality | null = rel.quality ?? null;
+    const qualityBtns: HTMLButtonElement[] = [];
+    for (const [val, lbl] of qualityValues) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        const ak = val === null ? 'none' : val;
+        btn.className = `quality-btn${currentQuality === val ? ` active-${ak}` : ''}`;
+        btn.textContent = lbl;
+        btn.dataset.val = val ?? '__none__';
+        btn.addEventListener('click', () => {
+            currentQuality = val;
+            qualityBtns.forEach(b => {
+                const v = b.dataset.val === '__none__' ? null : b.dataset.val as RelationshipQuality;
+                b.className = `quality-btn${v === currentQuality ? ` active-${v === null ? 'none' : v}` : ''}`;
+            });
+        });
+        qualityBtns.push(btn);
+        qualityOptions.appendChild(btn);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'form-actions';
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn-save-form'; saveBtn.textContent = 'Save';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn-cancel-form'; cancelBtn.textContent = 'Cancel';
+
+    saveBtn.addEventListener('click', () => {
+        const updated: FamilyRelation = {
+            ...rel,
+            from: Number(fromSelect.value),
+            to: Number(toSelect.value),
+            type: typeSelect.value as FamilyRelationType,
+            quality: currentQuality ?? undefined,
+        };
+        if (updated.from === updated.to) { alert('Person and "of" must be different people.'); return; }
+        const idx = (_data.familyRelations ?? []).findIndex(r => r.id === rel.id);
+        if (idx !== -1) _data.familyRelations![idx] = updated;
+        _openFamilyRelationId = null;
+        _onChange(_data);
+        renderFamilyRelationsList();
+    });
+
+    cancelBtn.addEventListener('click', () => { _openFamilyRelationId = null; renderFamilyRelationsList(); });
+
+    actions.append(saveBtn, cancelBtn);
+    form.append(personLabel, fromSelect, typeLabel, typeSelect, ofLabel, toSelect, qualityLabel, qualityOptions, actions);
+    return form;
+}
+
+export function addFamilyRelation() {
+    if (_data.persons.length < 2) { alert('Add at least two people before adding a family relation.'); return; }
+    if (!_data.familyRelations) _data.familyRelations = [];
+    const id = nextFamilyRelationId(_data);
+    const primary = _data.persons.find(p => p.isIndexPerson) ?? _data.persons[0];
+    const nonPrimary = _data.persons.find(p => p.id !== primary.id) ?? _data.persons[1];
+    const rel: FamilyRelation = {
+        id,
+        from: nonPrimary.id,
+        to: primary.id,
+        type: 'parent',
+    };
+    _data.familyRelations.push(rel);
+    _openFamilyRelationId = id;
+    _openPersonId = null;
+    _openUnionId = null;
+    _openBondId = null;
+    _onChange(_data);
+    renderPeopleList();
+    renderUnionsList();
+    renderFamilyRelationsList();
+    renderBondsList();
+}
+
+function deleteFamilyRelation(id: string) {
+    _data.familyRelations = (_data.familyRelations ?? []).filter(r => r.id !== id);
+    if (_openFamilyRelationId === id) _openFamilyRelationId = null;
+    _onChange(_data);
+    renderFamilyRelationsList();
+}
+
 // ── Bonds ─────────────────────────────────────────────────────────────────────
 
 let _openBondId: string | null = null;
@@ -452,6 +607,32 @@ function buildBondForm(bond: Bond): HTMLElement {
     customInput.value = bond.label ?? '';
     customInput.placeholder = 'e.g. AA Sponsor';
 
+    const bondQualityLabel = document.createElement('label'); bondQualityLabel.textContent = 'Relationship quality';
+    const bondQualityOptions = document.createElement('div');
+    bondQualityOptions.className = 'quality-options';
+    const bondQualityValues: Array<[RelationshipQuality | null, string]> = [
+        ['green', '🟢 Good'], ['yellow', '🟡 Strained'], ['red', '🔴 Conflicted'], [null, '— None'],
+    ];
+    let currentBondQuality: RelationshipQuality | null = bond.quality ?? null;
+    const bondQualityBtns: HTMLButtonElement[] = [];
+    for (const [val, lbl] of bondQualityValues) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        const ak = val === null ? 'none' : val;
+        btn.className = `quality-btn${currentBondQuality === val ? ` active-${ak}` : ''}`;
+        btn.textContent = lbl;
+        btn.dataset.val = val ?? '__none__';
+        btn.addEventListener('click', () => {
+            currentBondQuality = val;
+            bondQualityBtns.forEach(b => {
+                const v = b.dataset.val === '__none__' ? null : b.dataset.val as RelationshipQuality;
+                b.className = `quality-btn${v === currentBondQuality ? ` active-${v === null ? 'none' : v}` : ''}`;
+            });
+        });
+        bondQualityBtns.push(btn);
+        bondQualityOptions.appendChild(btn);
+    }
+
     const actions = document.createElement('div');
     actions.className = 'form-actions';
     const saveBtn = document.createElement('button');
@@ -466,6 +647,7 @@ function buildBondForm(bond: Bond): HTMLElement {
             to: Number(toSelect.value),
             type: typeSelect.value as BondType,
             label: customInput.value.trim() || undefined,
+            quality: currentBondQuality ?? undefined,
         };
         if (updated.from === updated.to) { alert('From and To must be different people.'); return; }
         const idx = (_data.bonds ?? []).findIndex(b => b.id === bond.id);
@@ -478,7 +660,7 @@ function buildBondForm(bond: Bond): HTMLElement {
     cancelBtn.addEventListener('click', () => { _openBondId = null; renderBondsList(); });
 
     actions.append(saveBtn, cancelBtn);
-    form.append(fromLabel, fromSelect, toLabel, toSelect, typeLabel, typeSelect, customLabel, customInput, actions);
+    form.append(fromLabel, fromSelect, toLabel, toSelect, typeLabel, typeSelect, customLabel, customInput, bondQualityLabel, bondQualityOptions, actions);
     return form;
 }
 

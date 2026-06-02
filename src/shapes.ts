@@ -116,6 +116,23 @@ export class MateLink extends shapes.standard.Link {
     }
 }
 
+export class FamilyRelationLink extends shapes.standard.Link {
+    defaults() {
+        return util.defaultsDeep({
+            type: 'genogram.FamilyRelationLink',
+            z: defaultZIndex.person - 1,
+            connector: { name: 'smooth' },
+            attrs: {
+                line: {
+                    stroke: '#64748b',
+                    strokeWidth: 1.5,
+                    targetMarker: null,
+                },
+            },
+        }, super.defaults);
+    }
+}
+
 export class BondLink extends shapes.standard.Link {
     defaults() {
         return util.defaultsDeep({

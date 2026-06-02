@@ -16,9 +16,13 @@ class DeceasedHighlighter extends dia.HighlighterView {
 
     protected highlight(elementView: dia.ElementView<dia.Element>) {
         const { width, height } = elementView.model.size();
-        const p = sizes.deceasedCrossInset;
-        this.el.setAttribute('d',
-            `M ${p} ${p} L ${width - p} ${height - p} M ${width - p} ${p} L ${p} ${height - p}`);
+        const margin = 5;
+        const size = 13;
+        const x1 = width - margin - size;
+        const y1 = height - margin - size;
+        const x2 = width - margin;
+        const y2 = height - margin;
+        this.el.setAttribute('d', `M ${x1} ${y1} L ${x2} ${y2} M ${x2} ${y1} L ${x1} ${y2}`);
     }
 }
 

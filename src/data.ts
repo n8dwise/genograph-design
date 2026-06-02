@@ -8,13 +8,34 @@ export interface Person {
     notes?: string;
 }
 
+export type FamilyRelationType =
+    | 'parent' | 'child' | 'sibling' | 'half-sibling' | 'aunt' | 'uncle' | 'niece' | 'nephew';
+
+export const FAMILY_RELATION_LABELS: Record<FamilyRelationType, string> = {
+    'parent':       'Parent',
+    'child':        'Child',
+    'sibling':      'Sibling',
+    'half-sibling': 'Half-Sibling',
+    'aunt':         'Aunt',
+    'uncle':        'Uncle',
+    'niece':        'Niece',
+    'nephew':       'Nephew',
+};
+
+export interface FamilyRelation {
+    id: string;
+    from: number;
+    to: number;
+    type: FamilyRelationType;
+    quality?: RelationshipQuality;
+}
+
 export type BondType =
-    | 'guardian' | 'parent' | 'close-friend' | 'counselor'
+    | 'guardian' | 'close-friend' | 'counselor'
     | 'mentor' | 'caregiver' | 'sponsor' | 'important-adult' | 'other';
 
 export const BOND_LABELS: Record<BondType, string> = {
     'guardian':       'Guardian',
-    'parent':         'Parent',
     'close-friend':   'Close Friend',
     'counselor':      'Counselor',
     'mentor':         'Mentor',
@@ -30,6 +51,7 @@ export interface Bond {
     to: number;
     type: BondType;
     label?: string;
+    quality?: RelationshipQuality;
 }
 
 export type UnionType = 'married' | 'cohabiting' | 'affair' | 'unknown';
@@ -52,6 +74,7 @@ export interface FamilyData {
     };
     persons: Person[];
     unions: Union[];
+    familyRelations?: FamilyRelation[];
     bonds?: Bond[];
 }
 
@@ -67,12 +90,15 @@ export interface LayoutPersonNode {
 export interface LayoutParentChildLink {
     parentId: number;
     childId: number;
+    fromFamilyRelation?: boolean;
+    unionId?: string;   // set for union-derived links; undefined for family relation links
 }
 
 export interface LayoutMateLink {
     from: number;
     to: number;
     unionId: string;
+    status?: UnionStatus;
 }
 
 /** Convert FamilyData persons to layout-compatible nodes, deriving mother/father from unions. */
@@ -110,9 +136,13 @@ export function getParentChildLinks(data: FamilyData): LayoutParentChildLink[] {
     for (const union of data.unions) {
         for (const childId of (union.children ?? [])) {
             for (const partnerId of union.partners) {
-                links.push({ parentId: partnerId, childId });
+                links.push({ parentId: partnerId, childId, unionId: union.id });
             }
         }
+    }
+    for (const rel of (data.familyRelations ?? [])) {
+        if (rel.type === 'parent') links.push({ parentId: rel.from, childId: rel.to, fromFamilyRelation: true });
+        else if (rel.type === 'child') links.push({ parentId: rel.to, childId: rel.from, fromFamilyRelation: true });
     }
     return links;
 }
@@ -122,6 +152,7 @@ export function getMateLinks(data: FamilyData): LayoutMateLink[] {
         from: u.partners[0],
         to: u.partners[1],
         unionId: u.id,
+        status: u.status,
     }));
 }
 
@@ -129,6 +160,13 @@ export function nextPersonId(data: FamilyData): number {
     return data.persons.length === 0
         ? 1
         : Math.max(...data.persons.map(p => p.id)) + 1;
+}
+
+export function nextFamilyRelationId(data: FamilyData): string {
+    const nums = (data.familyRelations ?? [])
+        .map(r => parseInt(r.id.replace(/\D/g, ''), 10))
+        .filter(n => !isNaN(n));
+    return `fr${nums.length === 0 ? 1 : Math.max(...nums) + 1}`;
 }
 
 export function nextBondId(data: FamilyData): string {

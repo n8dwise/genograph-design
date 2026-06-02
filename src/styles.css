@@ -166,6 +166,8 @@ body {
 .quality-red    { background: #dc2626; }
 .quality-neutral { background: #9ca3af; }
 
+.family-relation-badge { background: #64748b; }
+
 .btn-delete {
     padding: 1px 6px;
     font-size: 11px;
@@ -370,6 +372,70 @@ body {
     margin-top: 6px;
 }
 #setup-start:hover { background: #1d4ed8; }
+
+/* ── Legend ── */
+#legend {
+    position: absolute;
+    bottom: 14px;
+    right: 14px;
+    background: rgba(255,255,255,0.92);
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 11px;
+    color: #374151;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    pointer-events: none;
+    min-width: 140px;
+}
+
+.legend-title {
+    font-weight: 600;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+    margin-bottom: 6px;
+}
+
+.legend-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 4px;
+    line-height: 1;
+}
+
+.legend-swatch {
+    display: inline-block;
+    width: 22px;
+    height: 3px;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.legend-line-solid,
+.legend-line-dashed,
+.legend-line-support {
+    display: inline-block;
+    width: 22px;
+    height: 0;
+    border-top: 2.5px solid #9ca3af;
+    flex-shrink: 0;
+}
+
+.legend-line-dashed {
+    border-top-style: dashed;
+}
+
+.legend-line-support {
+    border-top: 2px dashed #7c3aed;
+}
+
+.legend-divider {
+    border-top: 1px solid #e2e8f0;
+    margin: 6px 0;
+}
 
 /* ── JointJS overrides ── */
 .joint-paper { border: none !important; outline: none !important; }
