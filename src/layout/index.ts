@@ -296,6 +296,68 @@ export function layoutGenogram({
     }
 
     // -----------------------------------------------------------------------
+    // Step 3.6: Active-side child repositioning
+    //   For multi-partner hubs, children of active unions belong to the RIGHT
+    //   of children of former (divorced/separated) unions. Dagre's crossing
+    //   minimization often places them on the wrong side; correct it here.
+    // -----------------------------------------------------------------------
+
+    for (const { hubId, orderedIds, unionByPartner } of multiPartnerInfos) {
+        const hubIndex = orderedIds.indexOf(hubId);
+        const formerPartnerIds = new Set(orderedIds.slice(0, hubIndex));
+        const activePartnerIds = new Set(orderedIds.slice(hubIndex + 1));
+        if (activePartnerIds.size === 0) continue;
+
+        const formerChildIds: number[] = [];
+        const activeChildIds: number[] = [];
+        for (const union of unions) {
+            const [p0, p1] = union.partners;
+            const isHubUnion = String(p0) === hubId || String(p1) === hubId;
+            if (!isHubUnion) continue;
+            const partnerStr = String(p0) === hubId ? String(p1) : String(p0);
+            for (const cid of (union.children ?? [])) {
+                if (formerPartnerIds.has(partnerStr)) formerChildIds.push(cid);
+                else if (activePartnerIds.has(partnerStr)) activeChildIds.push(cid);
+            }
+        }
+        if (activeChildIds.length === 0) continue;
+
+        // Rightmost right-edge across all former-side children and their mates
+        let rightmostEdge = -Infinity;
+        for (const cid of formerChildIds) {
+            const el = elementById.get(String(cid));
+            if (el) rightmostEdge = Math.max(rightmostEdge, el.position().x + el.size().width);
+            const mateId = mateOf.get(String(cid));
+            if (mateId) {
+                const mateEl = elementById.get(mateId);
+                if (mateEl) rightmostEdge = Math.max(rightmostEdge, mateEl.position().x + mateEl.size().width);
+            }
+        }
+        if (rightmostEdge === -Infinity) continue;
+
+        let nextX = rightmostEdge + sizes.symbolGap;
+        for (const cid of activeChildIds) {
+            const childEl = elementById.get(String(cid));
+            if (!childEl) continue;
+            const childY = childEl.position().y;
+            const mateId = mateOf.get(String(cid));
+            if (mateId) {
+                const mateEl = elementById.get(mateId);
+                if (mateEl) {
+                    const [leftEl, rightEl] = childEl.position().x <= mateEl.position().x
+                        ? [childEl, mateEl] : [mateEl, childEl];
+                    leftEl.position(nextX, childY);
+                    rightEl.position(nextX + sizes.symbolWidth + sizes.coupleGap, childY);
+                    nextX += sizes.symbolWidth * 2 + sizes.coupleGap + sizes.symbolGap;
+                }
+            } else {
+                childEl.position(nextX, childY);
+                nextX += sizes.symbolWidth + sizes.symbolGap;
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // Step 4: Remove dagre placeholder links; draw T-bar routing
     //   Each union with children gets: spine from biological couple midpoint
     //   → horizontal bar → individual drops to each child. This produces

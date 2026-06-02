@@ -112,6 +112,8 @@ function render(data: FamilyData) {
         graph.addCell(el);
     }
 
+    const supportPersonElements: dia.Element[] = [];
+
     for (const pEl of peripheralElements) {
         const pid = Number(pEl.id);
         const rels = (data.familyRelations ?? []).filter(r => r.from === pid || r.to === pid);
@@ -132,8 +134,37 @@ function render(data: FamilyData) {
             if (anchorEl) { placePeripheral(pEl, anchorEl, 'left'); continue; }
         }
 
-        // Bond-only peripherals are omitted from the diagram canvas.
-        // They appear in the Connections panel in the editor.
+        // Bond-only peripheral: show in support network panel below the tree
+        const hasBondToGraph = (data.bonds ?? []).some(b =>
+            (b.from === pid && graph.getCell(String(b.to))) ||
+            (b.to === pid && graph.getCell(String(b.from)))
+        );
+        if (hasBondToGraph) supportPersonElements.push(pEl);
+    }
+
+    // Place support network persons in a centered row below the family tree
+    if (supportPersonElements.length > 0) {
+        const allTreeEls = graph.getElements();
+        const treeBottom = allTreeEls.length > 0
+            ? Math.max(...allTreeEls.map(el => el.position().y + el.size().height))
+            : 0;
+        const treeLeft = allTreeEls.length > 0
+            ? Math.min(...allTreeEls.map(el => el.position().x))
+            : 0;
+        const treeRight = allTreeEls.length > 0
+            ? Math.max(...allTreeEls.map(el => el.position().x + el.size().width))
+            : 0;
+
+        const supportY = treeBottom + layoutSizes.levelGap * 1.5;
+        const totalW = supportPersonElements.length * layoutSizes.symbolWidth
+            + (supportPersonElements.length - 1) * layoutSizes.symbolGap;
+        let supportX = (treeLeft + treeRight) / 2 - totalW / 2;
+
+        for (const el of supportPersonElements) {
+            el.position(supportX, supportY);
+            graph.addCell(el);
+            supportX += layoutSizes.symbolWidth + layoutSizes.symbolGap;
+        }
     }
 
     applyPersonHighlighters(paper, data.persons);
@@ -168,13 +199,11 @@ function render(data: FamilyData) {
         const bx = bEl.getCenter().x;
         const bracketY = Math.min(aEl.position().y, bEl.position().y) - siblingBarOffset;
         const stroke = qualityStrokeColor(rel.quality);
-        const isHalfSibling = rel.type === 'half-sibling';
 
         const barLink = new ParentChildLink({});
         barLink.source({ x: Math.min(ax, bx), y: bracketY });
         barLink.target({ x: Math.max(ax, bx), y: bracketY });
         barLink.attr('line/stroke', stroke);
-        if (isHalfSibling) barLink.attr('line/strokeDasharray', '8 4');
         graph.addCell(barLink);
 
         for (const [id, x] of [[rel.from, ax], [rel.to, bx]] as [number, number][]) {
@@ -182,13 +211,12 @@ function render(data: FamilyData) {
             drop.source({ x, y: bracketY });
             drop.target({ id: String(id), anchor: { name: 'top', args: { useModelGeometry: true } } });
             drop.attr('line/stroke', stroke);
-            if (isHalfSibling) drop.attr('line/strokeDasharray', '8 4');
             graph.addCell(drop);
         }
     }
 
-    // Render bonds between structural persons only — peripheral-only bond figures
-    // are omitted from the canvas (they appear in the Connections panel).
+    // Render all bonds where both endpoints are on the canvas.
+    // Support-panel persons were added above, so their bonds are drawn too.
     const bondCells = (data.bonds ?? []).flatMap(bond => {
         if (!graph.getCell(String(bond.from)) || !graph.getCell(String(bond.to))) return [];
         const labelText = bond.type === 'other' && bond.label ? bond.label : BOND_LABELS[bond.type];
