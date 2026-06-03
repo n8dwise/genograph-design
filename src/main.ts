@@ -10,6 +10,7 @@ import { createPersonElement } from './utils';
 import { initEditor, setEditorData, addPerson, addUnion, addFamilyRelation, addBond, openPersonInEditor, openUnionInEditor } from './editor';
 import { saveFile, loadFile, exportPng } from './storage';
 import jsonGuideContent from './families/json-guide.md?raw';
+import userGuideContent from './user-guide.md?raw';
 import './styles.css';
 
 // ── JointJS setup ─────────────────────────────────────────────────────────────
@@ -353,6 +354,16 @@ document.getElementById('btn-json-guide')!.addEventListener('click', () => {
     const a = document.createElement('a');
     a.href = url;
     a.download = 'genograph-json-guide.md';
+    a.click();
+    URL.revokeObjectURL(url);
+});
+
+document.getElementById('btn-user-guide')!.addEventListener('click', () => {
+    const blob = new Blob([userGuideContent], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'genograph-user-guide.md';
     a.click();
     URL.revokeObjectURL(url);
 });
