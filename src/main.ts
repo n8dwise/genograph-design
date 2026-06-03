@@ -1,5 +1,5 @@
 import { dia, shapes } from '@joint/core';
-import { MalePerson, FemalePerson, OtherPerson, UnknownPerson, ParentChildLink, MateLink, BondLink, FamilyRelationLink } from './shapes';
+import { MalePerson, FemalePerson, OtherPerson, UnknownPerson, ParentChildLink, MateLink, BondLink } from './shapes';
 import { colors, sizes, linkStyleOverrides, qualityStrokeColor } from './theme';
 import { toLayoutPersonNodes, getParentChildLinks, getMateLinks, DEFAULT_FAMILY_DATA, BOND_LABELS, FAMILY_RELATION_LABELS } from './data';
 import exampleData from './families/example.json';
@@ -7,15 +7,16 @@ import type { FamilyData } from './data';
 import { layoutGenogram } from './layout';
 import { applyPersonHighlighters } from './highlighters';
 import { createPersonElement } from './utils';
-import { initEditor, setEditorData, addPerson, addUnion, addFamilyRelation, addBond } from './editor';
+import { initEditor, setEditorData, addPerson, addUnion, addFamilyRelation, addBond, openPersonInEditor, openUnionInEditor } from './editor';
 import { saveFile, loadFile, exportPng } from './storage';
+import jsonGuideContent from './families/json-guide.md?raw';
 import './styles.css';
 
 // ── JointJS setup ─────────────────────────────────────────────────────────────
 
 const cellNamespace = {
     ...shapes,
-    genogram: { MalePerson, FemalePerson, OtherPerson, UnknownPerson, ParentChildLink, MateLink, FamilyRelationLink, BondLink },
+    genogram: { MalePerson, FemalePerson, OtherPerson, UnknownPerson, ParentChildLink, MateLink, BondLink },
 };
 
 const graph = new dia.Graph({}, { cellNamespace });
@@ -26,10 +27,10 @@ const paper = new dia.Paper({
     width: '100%',
     height: '100%',
     gridSize: 1,
-    interactive: false,
+    interactive: (cellView) => cellView.model.isLink()
+        ? { linkMove: false, vertexAdd: false, vertexRemove: false, arrowheadMove: false }
+        : { elementMove: true },
     async: true,
-    frozen: true,
-    autoFreeze: true,
     background: { color: colors.paperBackground },
     defaultConnector: { name: 'straight' },
     defaultConnectionPoint: { name: 'rectangle', args: { useModelGeometry: true } },
@@ -42,7 +43,7 @@ document.getElementById('paper-container')!.appendChild(paper.el);
 
 let currentData: FamilyData = structuredClone(DEFAULT_FAMILY_DATA);
 
-function render(data: FamilyData) {
+function render(data: FamilyData, { fitContent = true } = {}) {
     currentData = data;
     const empty = document.getElementById('diagram-empty')!;
 
@@ -78,11 +79,12 @@ function render(data: FamilyData) {
     const peripheralElements = peripheralPersons.map(createPersonElement);
 
     graph.resetCells([]);
-    layoutGenogram({ graph, elements, persons: layoutPersons, parentChildLinks, mateLinks, unions: data.unions, familyRelations: data.familyRelations, sizes: layoutSizes, linkStyle: 'orthogonal', linkShapes: { ParentChildLink, MateLink } });
+    layoutGenogram({ graph, elements, persons: layoutPersons, parentChildLinks, mateLinks, unions: data.unions, familyRelations: data.familyRelations, sizes: layoutSizes, linkStyle: 'orthogonal', linkShapes: { ParentChildLink, MateLink }, savedPositions: data.positions });
 
     // Position and add peripheral elements based on their closest family relation or bond anchor.
     // Track rightmost occupied x per y-row to avoid overlap.
     const rowRightEdge = new Map<number, number>();
+    const rowLeftEdge = new Map<number, number>();
     function placePeripheral(el: dia.Element, anchorEl: dia.Element, side: 'left' | 'right') {
         const ap = anchorEl.position();
         const y = ap.y;
@@ -100,10 +102,10 @@ function render(data: FamilyData) {
         }
 
         if (side === 'left') {
-            const left = rowRightEdge.get(-(y + 1)) ?? (rowLeft - layoutSizes.symbolGap);
+            const left = rowLeftEdge.get(y) ?? (rowLeft - layoutSizes.symbolGap);
             const x = left - layoutSizes.symbolWidth;
             el.position(x, y);
-            rowRightEdge.set(-(y + 1), x - layoutSizes.symbolGap);
+            rowLeftEdge.set(y, x - layoutSizes.symbolGap);
         } else {
             const right = rowRightEdge.get(y) ?? (rowRight + layoutSizes.symbolGap);
             el.position(right, y);
@@ -167,6 +169,14 @@ function render(data: FamilyData) {
         }
     }
 
+    // Apply saved positions for peripheral elements (auto-placement is only a fallback)
+    if (data.positions) {
+        for (const el of peripheralElements) {
+            const saved = data.positions[el.id as string];
+            if (saved) el.position(saved.x, saved.y);
+        }
+    }
+
     applyPersonHighlighters(paper, data.persons);
 
     // Sibling brackets: for siblings not already connected via a shared union T-bar,
@@ -184,6 +194,9 @@ function render(data: FamilyData) {
 
     const drawnBrackets = new Set<string>();
     const siblingBarOffset = Math.round(sizes.levelGap * 0.25);
+    // Half-siblings are intentionally excluded here: their shared parent appearing
+    // in two separate T-bars already conveys the relationship visually. A bracket
+    // on top would be redundant and clinically misleading.
     for (const rel of (data.familyRelations ?? [])) {
         if (rel.type !== 'sibling') continue;
         const pairKey = `${Math.min(rel.from, rel.to)}-${Math.max(rel.from, rel.to)}`;
@@ -239,11 +252,12 @@ function render(data: FamilyData) {
 
     paper.freeze();
     paper.unfreeze();
-    paper.transformToFitContent({ padding: sizes.paperPadding, verticalAlign: 'top', horizontalAlign: 'middle', useModelGeometry: true });
+    if (fitContent) {
+        paper.transformToFitContent({ padding: sizes.paperPadding, verticalAlign: 'top', horizontalAlign: 'middle', useModelGeometry: true });
+    }
 }
 
 function handleDataChange(data: FamilyData) {
-    currentData = data;
     render(data);
 }
 
@@ -333,14 +347,127 @@ document.getElementById('btn-load')!.addEventListener('click', () => {
 
 document.getElementById('btn-save')!.addEventListener('click', () => saveFile(currentData));
 
-document.getElementById('btn-export-png')!.addEventListener('click', () => {
-    exportPng(paper, currentData.meta?.title ?? 'genograph');
+document.getElementById('btn-json-guide')!.addEventListener('click', () => {
+    const blob = new Blob([jsonGuideContent], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'genograph-json-guide.md';
+    a.click();
+    URL.revokeObjectURL(url);
 });
 
-document.getElementById('btn-add-person')!.addEventListener('click', () => addPerson());
-document.getElementById('btn-add-union')!.addEventListener('click', () => addUnion());
-document.getElementById('btn-add-family-relation')!.addEventListener('click', () => addFamilyRelation());
-document.getElementById('btn-add-bond')!.addEventListener('click', () => addBond());
+document.getElementById('btn-export-png')!.addEventListener('click', async () => {
+    await exportPng(paper, currentData.meta?.title ?? 'genograph');
+});
+
+// ── Accordion ─────────────────────────────────────────────────────────────────
+
+const accordionSections = ['people', 'unions', 'family-relations', 'bonds'] as const;
+
+function expandSection(id: typeof accordionSections[number] | null) {
+    for (const s of accordionSections) {
+        document.getElementById(`${s}-section`)!.classList.toggle('expanded', s === id);
+    }
+}
+
+expandSection('people'); // default open
+
+for (const s of accordionSections) {
+    document.querySelector(`#${s}-section .section-header`)!.addEventListener('click', (e) => {
+        if ((e.target as Element).closest('.btn-add')) return;
+        const isOpen = document.getElementById(`${s}-section`)!.classList.contains('expanded');
+        expandSection(isOpen ? null : s);
+    });
+}
+
+document.getElementById('btn-add-person')!.addEventListener('click', (e) => { e.stopPropagation(); expandSection('people'); addPerson(); });
+document.getElementById('btn-add-union')!.addEventListener('click', (e) => { e.stopPropagation(); expandSection('unions'); addUnion(); });
+document.getElementById('btn-add-family-relation')!.addEventListener('click', (e) => { e.stopPropagation(); expandSection('family-relations'); addFamilyRelation(); });
+document.getElementById('btn-add-bond')!.addEventListener('click', (e) => { e.stopPropagation(); expandSection('bonds'); addBond(); });
+
+document.getElementById('btn-relayout')!.addEventListener('click', () => {
+    currentData.positions = undefined;
+    render(currentData);
+});
+
+// ── Drag tracking ─────────────────────────────────────────────────────────────
+// On first drag, snapshot ALL element positions so re-renders preserve the
+// layout (dagre won't shuffle non-dragged elements when positions are saved).
+
+let _dragStartPos: { x: number; y: number } | null = null;
+
+paper.on('element:pointerdown', (elementView: dia.ElementView) => {
+    _dragStartPos = elementView.model.position();
+});
+
+paper.on('element:pointerup', (elementView: dia.ElementView) => {
+    const pos = elementView.model.position();
+    if (
+        _dragStartPos &&
+        (pos.x !== _dragStartPos.x || pos.y !== _dragStartPos.y) &&
+        /^\d+$/.test(elementView.model.id as string)
+    ) {
+        // Snapshot all person element positions so the whole layout is frozen
+        if (!currentData.positions) currentData.positions = {};
+        for (const el of graph.getElements()) {
+            const elId = el.id as string;
+            if (/^\d+$/.test(elId)) {
+                const p = el.position();
+                currentData.positions[elId] = { x: p.x, y: p.y };
+            }
+        }
+        render(currentData, { fitContent: false });
+    }
+    _dragStartPos = null;
+});
+
+// ── Diagram click-to-edit ─────────────────────────────────────────────────────
+
+paper.on('element:pointerclick', (elementView: dia.ElementView, evt: dia.Event) => {
+    if (_dragStartPos !== null) return; // still dragging
+    const id = elementView.model.id as string;
+    if (/^\d+$/.test(id)) {
+        evt.stopPropagation();
+        expandSection('people');
+        openPersonInEditor(Number(id));
+    }
+});
+
+paper.on('link:pointerclick', (linkView: dia.LinkView, evt: dia.Event) => {
+    const unionId = linkView.model.get('unionId') as string | undefined;
+    if (unionId) {
+        evt.stopPropagation();
+        expandSection('unions');
+        openUnionInEditor(unionId);
+    }
+});
+
+// ── Legend drag ───────────────────────────────────────────────────────────────
+
+const legend = document.getElementById('legend')!;
+const diagramPanel = document.getElementById('diagram-panel')!;
+let _legendDragging = false;
+let _legendOffsetX = 0, _legendOffsetY = 0;
+
+legend.addEventListener('mousedown', (e) => {
+    _legendDragging = true;
+    const rect = legend.getBoundingClientRect();
+    _legendOffsetX = e.clientX - rect.left;
+    _legendOffsetY = e.clientY - rect.top;
+    e.preventDefault();
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!_legendDragging) return;
+    const panel = diagramPanel.getBoundingClientRect();
+    legend.style.left   = `${e.clientX - panel.left - _legendOffsetX}px`;
+    legend.style.top    = `${e.clientY - panel.top  - _legendOffsetY}px`;
+    legend.style.right  = 'auto';
+    legend.style.bottom = 'auto';
+});
+
+document.addEventListener('mouseup', () => { _legendDragging = false; });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 

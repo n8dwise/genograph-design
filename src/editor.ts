@@ -34,6 +34,34 @@ export function setEditorData(data: FamilyData) {
     renderBondsList();
 }
 
+export function openPersonInEditor(id: number) {
+    _openPersonId = id;
+    _openUnionId = null;
+    _openFamilyRelationId = null;
+    _openBondId = null;
+    renderPeopleList();
+    renderUnionsList();
+    renderFamilyRelationsList();
+    renderBondsList();
+    requestAnimationFrame(() => {
+        document.querySelector('#people-list .active')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+}
+
+export function openUnionInEditor(id: string) {
+    _openUnionId = id;
+    _openPersonId = null;
+    _openFamilyRelationId = null;
+    _openBondId = null;
+    renderPeopleList();
+    renderUnionsList();
+    renderFamilyRelationsList();
+    renderBondsList();
+    requestAnimationFrame(() => {
+        document.querySelector('#unions-list .active')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+}
+
 // ── People ────────────────────────────────────────────────────────────────────
 
 function renderPeopleList() {
@@ -239,6 +267,36 @@ function toggleUnionForm(id: string) {
     renderUnionsList();
 }
 
+function buildQualityOptions(
+    current: RelationshipQuality | null,
+): { el: HTMLElement; getValue: () => RelationshipQuality | null } {
+    const container = document.createElement('div');
+    container.className = 'quality-options';
+    const values: Array<[RelationshipQuality | null, string]> = [
+        ['green', '🟢 Good'], ['yellow', '🟡 Strained'], ['red', '🔴 Conflicted'], [null, '— None'],
+    ];
+    let selected = current;
+    const btns: HTMLButtonElement[] = [];
+    for (const [val, lbl] of values) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        const ak = val === null ? 'none' : val;
+        btn.className = `quality-btn${selected === val ? ` active-${ak}` : ''}`;
+        btn.textContent = lbl;
+        btn.dataset.val = val ?? '__none__';
+        btn.addEventListener('click', () => {
+            selected = val;
+            btns.forEach(b => {
+                const v = b.dataset.val === '__none__' ? null : b.dataset.val as RelationshipQuality;
+                b.className = `quality-btn${v === selected ? ` active-${v === null ? 'none' : v}` : ''}`;
+            });
+        });
+        btns.push(btn);
+        container.appendChild(btn);
+    }
+    return { el: container, getValue: () => selected };
+}
+
 function buildUnionForm(union: Union): HTMLElement {
     const form = document.createElement('div');
     form.className = 'edit-form';
@@ -252,7 +310,7 @@ function buildUnionForm(union: Union): HTMLElement {
     const typeSelect = document.createElement('select');
     const typeOptions: Array<[UnionType, string]> = [
         ['married', 'Married'], ['cohabiting', 'Cohabiting / Partnered'],
-        ['affair', 'Affair'], ['unknown', 'Unknown'],
+        ['affair', 'Affair'], ['other', 'Other (custom label)'], ['unknown', 'Unknown'],
     ];
     for (const [val, lbl] of typeOptions) {
         const opt = document.createElement('option');
@@ -261,10 +319,20 @@ function buildUnionForm(union: Union): HTMLElement {
         typeSelect.appendChild(opt);
     }
 
+    const otherLabelInput = document.createElement('input');
+    otherLabelInput.type = 'text';
+    otherLabelInput.placeholder = 'Custom relationship label…';
+    otherLabelInput.value = union.label ?? '';
+    otherLabelInput.style.display = union.type === 'other' ? '' : 'none';
+    typeSelect.addEventListener('change', () => {
+        otherLabelInput.style.display = typeSelect.value === 'other' ? '' : 'none';
+    });
+
     const statusLabel = document.createElement('label'); statusLabel.textContent = 'Status';
     const statusSelect = document.createElement('select');
     const statusOptions: Array<[UnionStatus, string]> = [
         ['active', 'Active / Together'], ['separated', 'Separated'], ['divorced', 'Divorced'],
+        ['widowed', 'Widowed (one partner deceased)'], ['deceased', 'Both Deceased'],
     ];
     for (const [val, lbl] of statusOptions) {
         const opt = document.createElement('option');
@@ -273,31 +341,15 @@ function buildUnionForm(union: Union): HTMLElement {
         statusSelect.appendChild(opt);
     }
 
+    // Auto-default type to "married" when divorced is selected and type is still unknown
+    statusSelect.addEventListener('change', () => {
+        if (statusSelect.value === 'divorced' && typeSelect.value === 'unknown') {
+            typeSelect.value = 'married';
+        }
+    });
+
     const qualityLabel = document.createElement('label'); qualityLabel.textContent = 'Relationship quality';
-    const qualityOptions = document.createElement('div');
-    qualityOptions.className = 'quality-options';
-    const qualityValues: Array<[RelationshipQuality | null, string]> = [
-        ['green', '🟢 Good'], ['yellow', '🟡 Strained'], ['red', '🔴 Conflicted'], [null, '— None'],
-    ];
-    let currentQuality: RelationshipQuality | null = union.quality ?? null;
-    const qualityBtns: HTMLButtonElement[] = [];
-    for (const [val, lbl] of qualityValues) {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        const ak = val === null ? 'none' : val;
-        btn.className = `quality-btn${currentQuality === val ? ` active-${ak}` : ''}`;
-        btn.textContent = lbl;
-        btn.dataset.val = val ?? '__none__';
-        btn.addEventListener('click', () => {
-            currentQuality = val;
-            qualityBtns.forEach(b => {
-                const v = b.dataset.val === '__none__' ? null : b.dataset.val as RelationshipQuality;
-                b.className = `quality-btn${v === currentQuality ? ` active-${v === null ? 'none' : v}` : ''}`;
-            });
-        });
-        qualityBtns.push(btn);
-        qualityOptions.appendChild(btn);
-    }
+    const qualityWidget = buildQualityOptions(union.quality ?? null);
 
     const childLabel = document.createElement('label'); childLabel.textContent = 'Children';
     const childSelect = document.createElement('select');
@@ -332,8 +384,9 @@ function buildUnionForm(union: Union): HTMLElement {
         const updated: Union = {
             ...union, partners: [p0Id, p1Id],
             type: typeSelect.value as UnionType,
+            label: typeSelect.value === 'other' ? otherLabelInput.value.trim() || undefined : undefined,
             status: statusSelect.value as UnionStatus,
-            quality: currentQuality ?? undefined, children,
+            quality: qualityWidget.getValue() ?? undefined, children,
         };
         const idx = _data.unions.findIndex(u => u.id === union.id);
         if (idx !== -1) _data.unions[idx] = updated;
@@ -347,8 +400,8 @@ function buildUnionForm(union: Union): HTMLElement {
     actions.append(saveBtn, cancelBtn);
     form.append(
         p0Label, p0Select, p1Label, p1Select,
-        typeLabel, typeSelect, statusLabel, statusSelect,
-        qualityLabel, qualityOptions,
+        typeLabel, typeSelect, otherLabelInput, statusLabel, statusSelect,
+        qualityLabel, qualityWidget.el,
         childLabel, childSelect, childHint, actions,
     );
     return form;
@@ -441,7 +494,17 @@ function buildFamilyRelationForm(rel: FamilyRelation): HTMLElement {
 
     const typeLabel = document.createElement('label'); typeLabel.textContent = 'is a…';
     const typeSelect = document.createElement('select');
-    for (const [val, lbl] of Object.entries(FAMILY_RELATION_LABELS) as Array<[FamilyRelationType, string]>) {
+    const frTypeOrder: Array<[FamilyRelationType, string]> = [
+        ['aunt',         'Aunt'],
+        ['uncle',        'Uncle'],
+        ['niece',        'Niece'],
+        ['nephew',       'Nephew'],
+        ['parent',       'Parent (no union)'],
+        ['child',        'Child (no union)'],
+        ['sibling',      'Sibling (parents not in diagram)'],
+        ['half-sibling', 'Half-Sibling (different unions)'],
+    ];
+    for (const [val, lbl] of frTypeOrder) {
         const opt = document.createElement('option');
         opt.value = val; opt.textContent = lbl;
         if (rel.type === val) opt.selected = true;
@@ -452,30 +515,7 @@ function buildFamilyRelationForm(rel: FamilyRelation): HTMLElement {
     const toSelect = buildPersonSelect(rel.to);
 
     const qualityLabel = document.createElement('label'); qualityLabel.textContent = 'Relationship quality';
-    const qualityOptions = document.createElement('div');
-    qualityOptions.className = 'quality-options';
-    const qualityValues: Array<[RelationshipQuality | null, string]> = [
-        ['green', '🟢 Good'], ['yellow', '🟡 Strained'], ['red', '🔴 Conflicted'], [null, '— None'],
-    ];
-    let currentQuality: RelationshipQuality | null = rel.quality ?? null;
-    const qualityBtns: HTMLButtonElement[] = [];
-    for (const [val, lbl] of qualityValues) {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        const ak = val === null ? 'none' : val;
-        btn.className = `quality-btn${currentQuality === val ? ` active-${ak}` : ''}`;
-        btn.textContent = lbl;
-        btn.dataset.val = val ?? '__none__';
-        btn.addEventListener('click', () => {
-            currentQuality = val;
-            qualityBtns.forEach(b => {
-                const v = b.dataset.val === '__none__' ? null : b.dataset.val as RelationshipQuality;
-                b.className = `quality-btn${v === currentQuality ? ` active-${v === null ? 'none' : v}` : ''}`;
-            });
-        });
-        qualityBtns.push(btn);
-        qualityOptions.appendChild(btn);
-    }
+    const qualityWidget = buildQualityOptions(rel.quality ?? null);
 
     const actions = document.createElement('div');
     actions.className = 'form-actions';
@@ -490,7 +530,7 @@ function buildFamilyRelationForm(rel: FamilyRelation): HTMLElement {
             from: Number(fromSelect.value),
             to: Number(toSelect.value),
             type: typeSelect.value as FamilyRelationType,
-            quality: currentQuality ?? undefined,
+            quality: qualityWidget.getValue() ?? undefined,
         };
         if (updated.from === updated.to) { alert('Person and "of" must be different people.'); return; }
         const idx = (_data.familyRelations ?? []).findIndex(r => r.id === rel.id);
@@ -503,7 +543,7 @@ function buildFamilyRelationForm(rel: FamilyRelation): HTMLElement {
     cancelBtn.addEventListener('click', () => { _openFamilyRelationId = null; renderFamilyRelationsList(); });
 
     actions.append(saveBtn, cancelBtn);
-    form.append(personLabel, fromSelect, typeLabel, typeSelect, ofLabel, toSelect, qualityLabel, qualityOptions, actions);
+    form.append(personLabel, fromSelect, typeLabel, typeSelect, ofLabel, toSelect, qualityLabel, qualityWidget.el, actions);
     return form;
 }
 
@@ -608,30 +648,7 @@ function buildBondForm(bond: Bond): HTMLElement {
     customInput.placeholder = 'e.g. AA Sponsor';
 
     const bondQualityLabel = document.createElement('label'); bondQualityLabel.textContent = 'Relationship quality';
-    const bondQualityOptions = document.createElement('div');
-    bondQualityOptions.className = 'quality-options';
-    const bondQualityValues: Array<[RelationshipQuality | null, string]> = [
-        ['green', '🟢 Good'], ['yellow', '🟡 Strained'], ['red', '🔴 Conflicted'], [null, '— None'],
-    ];
-    let currentBondQuality: RelationshipQuality | null = bond.quality ?? null;
-    const bondQualityBtns: HTMLButtonElement[] = [];
-    for (const [val, lbl] of bondQualityValues) {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        const ak = val === null ? 'none' : val;
-        btn.className = `quality-btn${currentBondQuality === val ? ` active-${ak}` : ''}`;
-        btn.textContent = lbl;
-        btn.dataset.val = val ?? '__none__';
-        btn.addEventListener('click', () => {
-            currentBondQuality = val;
-            bondQualityBtns.forEach(b => {
-                const v = b.dataset.val === '__none__' ? null : b.dataset.val as RelationshipQuality;
-                b.className = `quality-btn${v === currentBondQuality ? ` active-${v === null ? 'none' : v}` : ''}`;
-            });
-        });
-        bondQualityBtns.push(btn);
-        bondQualityOptions.appendChild(btn);
-    }
+    const bondQualityWidget = buildQualityOptions(bond.quality ?? null);
 
     const actions = document.createElement('div');
     actions.className = 'form-actions';
@@ -647,7 +664,7 @@ function buildBondForm(bond: Bond): HTMLElement {
             to: Number(toSelect.value),
             type: typeSelect.value as BondType,
             label: customInput.value.trim() || undefined,
-            quality: currentBondQuality ?? undefined,
+            quality: bondQualityWidget.getValue() ?? undefined,
         };
         if (updated.from === updated.to) { alert('From and To must be different people.'); return; }
         const idx = (_data.bonds ?? []).findIndex(b => b.id === bond.id);
@@ -660,7 +677,7 @@ function buildBondForm(bond: Bond): HTMLElement {
     cancelBtn.addEventListener('click', () => { _openBondId = null; renderBondsList(); });
 
     actions.append(saveBtn, cancelBtn);
-    form.append(fromLabel, fromSelect, toLabel, toSelect, typeLabel, typeSelect, customLabel, customInput, bondQualityLabel, bondQualityOptions, actions);
+    form.append(fromLabel, fromSelect, toLabel, toSelect, typeLabel, typeSelect, customLabel, customInput, bondQualityLabel, bondQualityWidget.el, actions);
     return form;
 }
 

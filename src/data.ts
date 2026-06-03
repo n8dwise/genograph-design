@@ -54,14 +54,15 @@ export interface Bond {
     quality?: RelationshipQuality;
 }
 
-export type UnionType = 'married' | 'cohabiting' | 'affair' | 'unknown';
-export type UnionStatus = 'active' | 'separated' | 'divorced';
+export type UnionType = 'married' | 'cohabiting' | 'affair' | 'other' | 'unknown';
+export type UnionStatus = 'active' | 'separated' | 'divorced' | 'widowed' | 'deceased';
 export type RelationshipQuality = 'green' | 'yellow' | 'red';
 
 export interface Union {
     id: string;
     partners: [number, number];
     type?: UnionType;
+    label?: string;
     status?: UnionStatus;
     quality?: RelationshipQuality;
     children?: number[];
@@ -76,6 +77,7 @@ export interface FamilyData {
     unions: Union[];
     familyRelations?: FamilyRelation[];
     bonds?: Bond[];
+    positions?: Record<string, { x: number; y: number }>;
 }
 
 // Internal types used by the layout engine
@@ -83,6 +85,8 @@ export interface LayoutPersonNode {
     id: number;
     name: string;
     sex: 'M' | 'F' | '?';
+    age?: number;
+    deceased?: boolean;
     mother?: number;
     father?: number;
 }
@@ -125,6 +129,8 @@ export function toLayoutPersonNodes(data: FamilyData): LayoutPersonNode[] {
             id: p.id,
             name: p.name,
             sex: (p.sex === 'O' ? '?' : p.sex) as 'M' | 'F' | '?',
+            age: p.age,
+            deceased: p.deceased,
             mother,
             father,
         };
@@ -164,21 +170,21 @@ export function nextPersonId(data: FamilyData): number {
 
 export function nextFamilyRelationId(data: FamilyData): string {
     const nums = (data.familyRelations ?? [])
-        .map(r => parseInt(r.id.replace(/\D/g, ''), 10))
+        .map(r => parseInt(r.id.slice(2), 10))
         .filter(n => !isNaN(n));
     return `fr${nums.length === 0 ? 1 : Math.max(...nums) + 1}`;
 }
 
 export function nextBondId(data: FamilyData): string {
     const nums = (data.bonds ?? [])
-        .map(b => parseInt(b.id.replace(/\D/g, ''), 10))
+        .map(b => parseInt(b.id.slice(1), 10))
         .filter(n => !isNaN(n));
     return `b${nums.length === 0 ? 1 : Math.max(...nums) + 1}`;
 }
 
 export function nextUnionId(data: FamilyData): string {
     const nums = data.unions
-        .map(u => parseInt(u.id.replace(/\D/g, ''), 10))
+        .map(u => parseInt(u.id.slice(1), 10))
         .filter(n => !isNaN(n));
     return `u${nums.length === 0 ? 1 : Math.max(...nums) + 1}`;
 }

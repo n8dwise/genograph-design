@@ -14,21 +14,22 @@
     { "id": 11, "name": "Martha",     "sex": "F", "age": 88, "deceased": true },
     { "id": 12, "name": "Don",        "sex": "M", "age": 44 },
     { "id": 13, "name": "Aunt Lisa",  "sex": "F", "age": 59 },
-    { "id": 14, "name": "Dr. Park",   "sex": "F", "age": 46 }
+    { "id": 14, "name": "Dr. Park",   "sex": "F", "age": 46 },
+    { "id": 15, "name": "River",      "sex": "O", "age": 13 }
   ],
   "unions": [
-    { "id": "u1", "partners": [10, 11], "type": "married",    "status": "active",   "children": [2] },
+    { "id": "u1", "partners": [10, 11], "type": "married",    "status": "active",   "children": [2, 13] },
     { "id": "u2", "partners": [2,  3],  "type": "married",    "status": "divorced", "quality": "red",    "children": [1, 5] },
     { "id": "u3", "partners": [2,  4],  "type": "married",    "status": "active",   "quality": "green",  "children": [6] },
-    { "id": "u4", "partners": [1,  7],  "type": "married",    "status": "active",   "quality": "green",  "children": [8, 9] },
+    { "id": "u4", "partners": [1,  7],  "type": "married",    "status": "active",   "quality": "green",  "children": [8, 9, 15] },
     { "id": "u5", "partners": [5, 12],  "type": "cohabiting", "status": "active",   "quality": "yellow" }
   ],
   "familyRelations": [
     { "id": "fr1", "from": 6, "to": 1, "type": "half-sibling", "quality": "yellow" },
-    { "id": "fr2", "from": 6, "to": 5, "type": "half-sibling" },
-    { "id": "fr3", "from": 13, "to": 2, "type": "sibling", "quality": "green" }
+    { "id": "fr2", "from": 6, "to": 5, "type": "half-sibling", "quality": "red" }
   ],
   "bonds": [
-    { "id": "b1", "from": 14, "to": 1, "type": "counselor", "quality": "green" }
+    { "id": "b1", "from": 14, "to": 1, "type": "counselor", "quality": "green" },
+    { "id": "b2", "from": 15, "to": 14, "type": "mentor",   "quality": "yellow" }
   ]
 }

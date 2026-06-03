@@ -1,6 +1,6 @@
 import { dia } from '@joint/core';
 import { MalePerson, FemalePerson, OtherPerson, UnknownPerson } from './shapes';
-import type { Person, LayoutParentChildLink } from './data';
+import type { Person } from './data';
 
 export function createPersonElement(person: Person): dia.Element {
     const ShapeClass =
@@ -22,18 +22,3 @@ export function createPersonElement(person: Person): dia.Element {
     });
 }
 
-export function buildFamilyTree(
-    persons: Person[],
-    parentChildLinks: LayoutParentChildLink[],
-): dia.Graph {
-    const familyTree = new dia.Graph();
-    familyTree.resetCells([
-        ...persons.map(p => new dia.Element({ id: String(p.id), type: 'family-element' })),
-        ...parentChildLinks.map(rel => new dia.Link({
-            type: 'family-link',
-            source: { id: String(rel.parentId) },
-            target: { id: String(rel.childId) },
-        })),
-    ]);
-    return familyTree;
-}

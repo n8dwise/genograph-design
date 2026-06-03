@@ -30,10 +30,11 @@ interface LayoutInput {
         ParentChildLink?: LinkConstructor;
         MateLink?: LinkConstructor;
     };
+    savedPositions?: Record<string, { x: number; y: number }>;
 }
 
 export function layoutGenogram({
-    graph, elements, persons, parentChildLinks, mateLinks, unions, familyRelations, sizes, linkStyle = 'fan', linkShapes,
+    graph, elements, persons, parentChildLinks, mateLinks, unions, familyRelations, sizes, linkStyle = 'fan', linkShapes, savedPositions,
 }: LayoutInput): void {
 
     const ParentChildLinkShape = linkShapes?.ParentChildLink ?? shapes.standard.Link as unknown as LinkConstructor;
@@ -56,10 +57,6 @@ export function layoutGenogram({
 
     interface CoupleInfo { container: dia.Element; fromId: string; toId: string; unionId: string; }
     const coupleInfos: CoupleInfo[] = [];
-
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    interface FormerCoupleInfo { fromId: string; toId: string; unionId: string; }
-    const formerCoupleInfos: FormerCoupleInfo[] = [];
 
     // Hub persons (in 2+ unions) get a wide timeline container:
     //   [former partner(s)…] [hub] [active partner(s)…]
@@ -96,7 +93,7 @@ export function layoutGenogram({
         handledIds.add(hubId);
 
         const getPartner = (ml: LayoutMateLink) => String(ml.from) === hubId ? String(ml.to) : String(ml.from);
-        const formerMls  = hubMl.filter(ml => ml.status === 'divorced' || ml.status === 'separated');
+        const formerMls  = hubMl.filter(ml => ml.status === 'divorced' || ml.status === 'separated' || ml.status === 'widowed' || ml.status === 'deceased');
         const activeMls  = hubMl.filter(ml => !ml.status || ml.status === 'active');
         const formerPids = formerMls.map(getPartner).filter(pid => !handledIds.has(pid));
         const activePids = activeMls .map(getPartner).filter(pid => !handledIds.has(pid));
@@ -296,13 +293,19 @@ export function layoutGenogram({
     }
 
     // -----------------------------------------------------------------------
-    // Step 3.6: Active-side child repositioning
-    //   For multi-partner hubs, children of active unions belong to the RIGHT
-    //   of children of former (divorced/separated) unions. Dagre's crossing
-    //   minimization often places them on the wrong side; correct it here.
+    // Step 3.6: Child-side separation for multi-partner hubs
+    //
+    //   Part A — Active-side children pushed right of all former-side children.
+    //            Dagre's crossing minimization often places them on the wrong side.
+    //
+    //   Part B — Former-side coupled children clamped left of the hub–active-
+    //            partner midpoint. Dagre can place a coupled former child (e.g.
+    //            Megan+Don) to the right of that midpoint, causing their T-bar's
+    //            horizontal bar to visually bleed into the active-side T-bar at
+    //            the same barY level and make the two bars look like one.
     // -----------------------------------------------------------------------
 
-    for (const { hubId, orderedIds, unionByPartner } of multiPartnerInfos) {
+    for (const { hubId, orderedIds } of multiPartnerInfos) {
         const hubIndex = orderedIds.indexOf(hubId);
         const formerPartnerIds = new Set(orderedIds.slice(0, hubIndex));
         const activePartnerIds = new Set(orderedIds.slice(hubIndex + 1));
@@ -320,40 +323,258 @@ export function layoutGenogram({
                 else if (activePartnerIds.has(partnerStr)) activeChildIds.push(cid);
             }
         }
-        if (activeChildIds.length === 0) continue;
 
-        // Rightmost right-edge across all former-side children and their mates
-        let rightmostEdge = -Infinity;
-        for (const cid of formerChildIds) {
-            const el = elementById.get(String(cid));
-            if (el) rightmostEdge = Math.max(rightmostEdge, el.position().x + el.size().width);
-            const mateId = mateOf.get(String(cid));
-            if (mateId) {
-                const mateEl = elementById.get(mateId);
-                if (mateEl) rightmostEdge = Math.max(rightmostEdge, mateEl.position().x + mateEl.size().width);
+        // Part A: push active-side children to the right of all former-side children
+        if (activeChildIds.length > 0) {
+            let rightmostEdge = -Infinity;
+            for (const cid of formerChildIds) {
+                const el = elementById.get(String(cid));
+                if (el) rightmostEdge = Math.max(rightmostEdge, el.position().x + el.size().width);
+                const mateId = mateOf.get(String(cid));
+                if (mateId) {
+                    const mateEl = elementById.get(mateId);
+                    if (mateEl) rightmostEdge = Math.max(rightmostEdge, mateEl.position().x + mateEl.size().width);
+                }
+            }
+            if (rightmostEdge > -Infinity) {
+                let nextX = rightmostEdge + sizes.symbolGap;
+                for (const cid of activeChildIds) {
+                    const childEl = elementById.get(String(cid));
+                    if (!childEl) continue;
+                    const childY = childEl.position().y;
+                    const mateId = mateOf.get(String(cid));
+                    if (mateId) {
+                        const mateEl = elementById.get(mateId);
+                        if (mateEl) {
+                            const [leftEl, rightEl] = childEl.position().x <= mateEl.position().x
+                                ? [childEl, mateEl] : [mateEl, childEl];
+                            leftEl.position(nextX, childY);
+                            rightEl.position(nextX + sizes.symbolWidth + sizes.coupleGap, childY);
+                            nextX += sizes.symbolWidth * 2 + sizes.coupleGap + sizes.symbolGap;
+                        }
+                    } else {
+                        childEl.position(nextX, childY);
+                        nextX += sizes.symbolWidth + sizes.symbolGap;
+                    }
+                }
             }
         }
-        if (rightmostEdge === -Infinity) continue;
 
-        let nextX = rightmostEdge + sizes.symbolGap;
-        for (const cid of activeChildIds) {
-            const childEl = elementById.get(String(cid));
+        // Part B: clamp former-side coupled children left of the hub–active-partner midpoint.
+        // Process couples right-to-left so each couple stacks to the left of the previous one
+        // rather than all landing at the same boundary (which caused overlaps).
+        if (formerChildIds.length > 0) {
+            const hubEl = elementById.get(hubId);
+            if (hubEl) {
+                const hubCenterX = hubEl.getCenter().x;
+                const activeMidXs: number[] = [];
+                for (const pid of activePartnerIds) {
+                    const pEl = elementById.get(pid);
+                    if (pEl) activeMidXs.push((hubCenterX + pEl.getCenter().x) / 2);
+                }
+                if (activeMidXs.length > 0) {
+                    // Collect each unique couple among former children
+                    const seen = new Set<string>();
+                    const formerCouples: Array<{ childEl: dia.Element; mateEl: dia.Element }> = [];
+                    for (const cid of formerChildIds) {
+                        const cidStr = String(cid);
+                        if (seen.has(cidStr)) continue;
+                        const childEl = elementById.get(cidStr);
+                        if (!childEl) continue;
+                        const mateId = mateOf.get(cidStr);
+                        if (!mateId) continue;
+                        const mateEl = elementById.get(mateId);
+                        if (!mateEl) continue;
+                        seen.add(cidStr);
+                        seen.add(mateId);
+                        formerCouples.push({ childEl, mateEl });
+                    }
+
+                    // Sort rightmost couple first so we can stack left-ward
+                    formerCouples.sort((a, b) => {
+                        const aRight = Math.max(
+                            a.childEl.position().x + a.childEl.size().width,
+                            a.mateEl.position().x + a.mateEl.size().width,
+                        );
+                        const bRight = Math.max(
+                            b.childEl.position().x + b.childEl.size().width,
+                            b.mateEl.position().x + b.mateEl.size().width,
+                        );
+                        return bRight - aRight; // descending
+                    });
+
+                    // Walk right-to-left: each couple's right edge must stay left of currentBoundary
+                    let currentBoundary = Math.min(...activeMidXs) - sizes.symbolGap;
+                    for (const { childEl, mateEl } of formerCouples) {
+                        const coupleRight = Math.max(
+                            childEl.position().x + childEl.size().width,
+                            mateEl.position().x + mateEl.size().width,
+                        );
+                        if (coupleRight > currentBoundary) {
+                            const shift = coupleRight - currentBoundary;
+                            const cp = childEl.position();
+                            const mp = mateEl.position();
+                            childEl.position(cp.x - shift, cp.y);
+                            mateEl.position(mp.x - shift, mp.y);
+                        }
+                        // Next couple must sit to the left of this couple's left edge
+                        const coupleLeft = Math.min(
+                            childEl.position().x,
+                            mateEl.position().x,
+                        );
+                        currentBoundary = coupleLeft - sizes.symbolGap;
+                    }
+                }
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Step 3.7: Sort children within each union by age descending (oldest = leftmost)
+    // Only activates when every child in the union has a known age AND all
+    // children are solo (no mate, no multi-partner container).
+    //
+    // Restricting to solo children avoids width-mismatch problems: swapping
+    // x-slots only works cleanly when all units are the same width. Coupled
+    // children (Alex+Jordan, Megan+Don) and hub containers are skipped so that
+    // the sort is reliable without disturbing surrounding relationships.
+    // -----------------------------------------------------------------------
+
+    // Build a lookup: personId → all orderedIds of their multi-partner container
+    const personMultiContainerIds = new Map<string, string[]>();
+    for (const { orderedIds } of multiPartnerInfos) {
+        for (const pid of orderedIds) personMultiContainerIds.set(pid, orderedIds);
+    }
+
+    for (const union of unions) {
+        if (!union.children || union.children.length < 2) continue;
+
+        // Only sort when every child is solo — not part of any couple or hub container
+        const allSolo = union.children.every(cid => {
+            const cidStr = String(cid);
+            return !mateOf.has(cidStr) && !personMultiContainerIds.has(cidStr);
+        });
+        if (!allSolo) continue;
+
+        interface ChildUnit { childId: string; age: number; leftX: number; }
+        const units: ChildUnit[] = [];
+        let hasAllAges = true;
+
+        for (const cid of union.children) {
+            const cidStr = String(cid);
+            const childEl = elementById.get(cidStr);
             if (!childEl) continue;
-            const childY = childEl.position().y;
-            const mateId = mateOf.get(String(cid));
+            const person = personById.get(cid);
+            if (person?.age === undefined) { hasAllAges = false; break; }
+            units.push({ childId: cidStr, age: person.age, leftX: childEl.position().x });
+        }
+
+        if (!hasAllAges || units.length < 2) continue;
+
+        const slots = [...units].map(u => u.leftX).sort((a, b) => a - b);
+        const ageOrdered = [...units].sort((a, b) => b.age - a.age);
+
+        for (let i = 0; i < ageOrdered.length; i++) {
+            const unit = ageOrdered[i];
+            const delta = slots[i] - unit.leftX;
+            if (Math.abs(delta) < 1) continue;
+            elementById.get(unit.childId)!.position(
+                elementById.get(unit.childId)!.position().x + delta,
+                elementById.get(unit.childId)!.position().y,
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Step 3.7b: Solo-vs-container age ordering
+    // When a union has both a multi-partner-container child and a solo child
+    // with known ages, ensure younger solo siblings are placed to the RIGHT of
+    // the container. (Step 3.7's slot-swap can't handle mixed-width units, so
+    // this targeted step fills the gap.)
+    // -----------------------------------------------------------------------
+
+    for (const union of unions) {
+        if (!union.children || union.children.length < 2) continue;
+
+        for (const soloCid of union.children) {
+            const soloCidStr = String(soloCid);
+            if (mateOf.has(soloCidStr) || personMultiContainerIds.has(soloCidStr)) continue;
+            const soloEl = elementById.get(soloCidStr);
+            const soloAge = personById.get(soloCid)?.age;
+            if (!soloEl || soloAge === undefined) continue;
+
+            for (const contCid of union.children) {
+                if (contCid === soloCid) continue;
+                const contCidStr = String(contCid);
+                const containerIds = personMultiContainerIds.get(contCidStr);
+                if (!containerIds) continue;
+                const contAge = personById.get(contCid)?.age;
+                if (contAge === undefined) continue;
+
+                if (soloAge < contAge) {
+                    // Solo child is younger → must sit to the RIGHT of the container
+                    const contRight = Math.max(
+                        ...containerIds.map(pid => (elementById.get(pid)?.position().x ?? 0) + sizes.symbolWidth)
+                    );
+                    if (soloEl.position().x < contRight + sizes.symbolGap) {
+                        soloEl.position(contRight + sizes.symbolGap, soloEl.position().y);
+                    }
+                }
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Step 3.8: Overlap prevention — sweep each Y-row left→right and push
+    // apart any person boxes that are closer than symbolGap.
+    // Moves the element plus its direct mate to preserve couple spacing.
+    // Three passes handle most cascading overlaps without infinite loops.
+    // -----------------------------------------------------------------------
+    {
+        const rowTolerance = sizes.symbolHeight * 0.75;
+        // Group elements by approximate Y row
+        const rows = new Map<number, dia.Element[]>();
+        for (const el of elements) {
+            const y = el.position().y;
+            let matched: number | undefined;
+            for (const k of rows.keys()) {
+                if (Math.abs(k - y) <= rowTolerance) { matched = k; break; }
+            }
+            if (matched === undefined) { matched = y; rows.set(matched, []); }
+            rows.get(matched)!.push(el);
+        }
+
+        // Move element + direct mate only. Do NOT cascade to multi-partner container
+        // siblings: that would drag Carol when Susan is pushed right (or vice versa),
+        // causing new overlaps on the left side of the container.
+        const pushRight = (el: dia.Element, delta: number) => {
+            el.position(el.position().x + delta, el.position().y);
+            const mateId = mateOf.get(el.id as string);
             if (mateId) {
                 const mateEl = elementById.get(mateId);
-                if (mateEl) {
-                    const [leftEl, rightEl] = childEl.position().x <= mateEl.position().x
-                        ? [childEl, mateEl] : [mateEl, childEl];
-                    leftEl.position(nextX, childY);
-                    rightEl.position(nextX + sizes.symbolWidth + sizes.coupleGap, childY);
-                    nextX += sizes.symbolWidth * 2 + sizes.coupleGap + sizes.symbolGap;
-                }
-            } else {
-                childEl.position(nextX, childY);
-                nextX += sizes.symbolWidth + sizes.symbolGap;
+                if (mateEl) mateEl.position(mateEl.position().x + delta, mateEl.position().y);
             }
+        };
+
+        for (let pass = 0; pass < 3; pass++) {
+            for (const rowEls of rows.values()) {
+                rowEls.sort((a, b) => a.position().x - b.position().x);
+                for (let i = 1; i < rowEls.length; i++) {
+                    const prev = rowEls[i - 1];
+                    const curr = rowEls[i];
+                    const gap = curr.position().x - (prev.position().x + prev.size().width);
+                    if (gap < sizes.symbolGap) pushRight(curr, sizes.symbolGap - gap);
+                }
+            }
+        }
+    }
+
+    // Apply user-dragged position overrides — must happen after all auto-layout
+    // steps so T-bars in Step 4 are computed from the saved positions.
+    if (savedPositions) {
+        for (const el of elements) {
+            const saved = savedPositions[el.id as string];
+            if (saved) el.position(saved.x, saved.y);
         }
     }
 
@@ -408,19 +629,46 @@ export function layoutGenogram({
 
         const barY = parentBottomY + barDrop;
         const childCenterXs = childEls.map(el => el.getCenter().x);
-        const stroke = qualityStrokeColor(union.quality);
-
-        // Spine: biological couple midpoint bottom → bar level
-        const spine = makeSegment(stroke);
-        spine.source({ x: midX, y: parentBottomY });
-        spine.target({ x: midX, y: barY });
-        graph.addCell(spine);
-
-        // Horizontal bar spanning all children (or single-child offset)
         const minChildX = Math.min(...childCenterXs);
         const maxChildX = Math.max(...childCenterXs);
-        const barLeft  = Math.min(midX, minChildX);
-        const barRight = Math.max(midX, maxChildX);
+        const childrenMidX = (minChildX + maxChildX) / 2;
+        const stroke = qualityStrokeColor(undefined); // T-bars are always neutral — quality only colors mate lines
+
+        // Spine: straight drop for a single child; Z-step to centre over multiple children
+        // when the couple midpoint doesn't already land between them.
+        // Z-step draws: down → across to childrenMidX → down to barY.
+        // Single-child unions skip the Z-step to avoid a U-shape that visually bleeds
+        // into adjacent T-bars; instead the bar at barY connects the spine to the child.
+        const useZStep = childEls.length > 1 && Math.abs(midX - childrenMidX) > 1;
+        let spineEndX: number;
+
+        if (useZStep) {
+            const stepY = parentBottomY + Math.round(barDrop / 2);
+            const down1 = makeSegment(stroke);
+            down1.source({ x: midX, y: parentBottomY });
+            down1.target({ x: midX, y: stepY });
+            graph.addCell(down1);
+            const across = makeSegment(stroke);
+            across.source({ x: Math.min(midX, childrenMidX), y: stepY });
+            across.target({ x: Math.max(midX, childrenMidX), y: stepY });
+            graph.addCell(across);
+            const down2 = makeSegment(stroke);
+            down2.source({ x: childrenMidX, y: stepY });
+            down2.target({ x: childrenMidX, y: barY });
+            graph.addCell(down2);
+            spineEndX = childrenMidX;
+        } else {
+            const spine = makeSegment(stroke);
+            spine.source({ x: midX, y: parentBottomY });
+            spine.target({ x: midX, y: barY });
+            graph.addCell(spine);
+            spineEndX = midX;
+        }
+
+        // Horizontal bar: spans from spine end through all children, ensuring the
+        // spine is always visually connected to every child's drop point.
+        const barLeft = Math.min(spineEndX, minChildX);
+        const barRight = Math.max(spineEndX, maxChildX);
         if (Math.abs(barRight - barLeft) > 1) {
             const bar = makeSegment(stroke);
             bar.source({ x: barLeft, y: barY });
@@ -469,22 +717,43 @@ export function layoutGenogram({
         const union = unionById.get(unionId);
         const stroke = qualityStrokeColor(union?.quality);
         const status = union?.status ?? 'active';
-        const dasharray = status === 'divorced' ? '10 5' : status === 'separated' ? '5 4' : '';
+        const dasharray =
+            status === 'divorced'  ? '10 5' :
+            status === 'separated' ? '5 4' :
+            status === 'widowed'   ? '3 4' :
+            status === 'deceased'  ? '8 4 2 4' :
+            '';
         const link = new MateLinkShape({
             source: { id: fromId, anchor: { name: 'center', args: { useModelGeometry: true } } },
             target: { id: toId, anchor: { name: 'center', args: { useModelGeometry: true } } },
+            unionId,
         });
         link.attr('line/stroke', stroke);
         if (dasharray) link.attr('line/strokeDasharray', dasharray);
 
         const type = union?.type;
         if (type && type !== 'unknown') {
-            const typeStr = type === 'married' ? 'Married' : type === 'cohabiting' ? 'Cohabiting' : 'Affair';
-            const statusStr = status === 'divorced' ? ', Divorced' : status === 'separated' ? ', Separated' : '';
+            const typeStr = type === 'married' ? 'Married' : type === 'cohabiting' ? 'Cohabiting' : type === 'affair' ? 'Affair' : (union?.label || 'Other');
+            const isEnded = status === 'divorced' || status === 'separated' || status === 'widowed' || status === 'deceased';
+            let labelText: string;
+            if (!isEnded) {
+                const bothDeceased = personById.get(Number(fromId))?.deceased && personById.get(Number(toId))?.deceased;
+                labelText = bothDeceased ? `${typeStr}, Deceased` : typeStr;
+            } else if (status === 'separated' && (type === 'cohabiting' || type === 'affair')) {
+                // Non-marriage separation needs context ("Cohabiting, Separated")
+                labelText = `${typeStr}, Separated`;
+            } else {
+                // Ended state is self-explanatory: show status only
+                labelText =
+                    status === 'divorced'  ? 'Divorced'  :
+                    status === 'separated' ? 'Separated' :
+                    status === 'widowed'   ? 'Widowed'   :
+                    'Both Deceased';
+            }
             link.labels([{
                 position: { distance: 0.5, offset: -29 },
                 attrs: {
-                    text: { text: typeStr + statusStr, fontSize: 9, fill: '#64748b', fontFamily: 'system-ui, sans-serif' },
+                    text: { text: labelText, fontSize: 9, fill: '#64748b', fontFamily: 'system-ui, sans-serif' },
                     rect: { fill: 'white', stroke: '#e2e8f0', strokeWidth: 1, rx: 2, ry: 2 },
                 },
             }]);
@@ -509,7 +778,4 @@ export function layoutGenogram({
     }
     if (multiMateLinks_.length > 0) graph.addCells(multiMateLinks_);
 
-    // Truly-former couple mate links (non-hub divorced pairs)
-    const formerMateLinks_ = formerCoupleInfos.map(({ fromId, toId, unionId }) => makeMateLink(fromId, toId, unionId));
-    if (formerMateLinks_.length > 0) graph.addCells(formerMateLinks_);
 }

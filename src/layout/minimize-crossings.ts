@@ -131,12 +131,12 @@ export function minimizeCrossings(
             const bb = barycenters.get(b)!;
             if (ba !== bb) return ba - bb;
 
-            // Tie-breaker: birth date, then identical group.
+            // Tie-breaker: age (older left), then identical group.
             const personA = personById.get(Number(a));
             const personB = personById.get(Number(b));
             if (personA && personB) {
-                const birthCmp = (personA.dob || '').localeCompare(personB.dob || '');
-                if (birthCmp !== 0) return birthCmp;
+                const ageCmp = (personB.age ?? 0) - (personA.age ?? 0);
+                if (ageCmp !== 0) return ageCmp;
 
                 const groupA = identicalGroupOf.get(personA.id) ?? personA.id;
                 const groupB = identicalGroupOf.get(personB.id) ?? personB.id;
@@ -384,7 +384,7 @@ function enforceTwinAdjacency(
                 const identA = identicalGroupOf.get(personA.id) ?? personA.id;
                 const identB = identicalGroupOf.get(personB.id) ?? personB.id;
                 if (identA !== identB) return identA - identB;
-                return (personA.dob || '').localeCompare(personB.dob || '');
+                return (personB.age ?? 0) - (personA.age ?? 0);
             });
 
             const memberSet = new Set(members);

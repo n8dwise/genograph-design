@@ -11,13 +11,14 @@
             <span class="app-title">Genograph</span>
             <input id="tree-title" type="text" placeholder="Family name…" autocomplete="off" />
             <div class="toolbar-actions">
-                <button id="btn-new" title="New diagram">New</button>
-                <button id="btn-sample" title="Load sample family">Sample</button>
-                <button id="btn-load" title="Load JSON file">Load</button>
-                <button id="btn-save" title="Save as JSON">Save</button>
-                <button id="btn-export-png" title="Export diagram as PNG">Export PNG</button>
+                <button id="btn-new" data-tooltip="Start a new blank genograph">New Genograph</button>
+                <button id="btn-sample" data-tooltip="Load a 4-generation sample family">Sample Genograph</button>
+                <button id="btn-load" data-tooltip="Load a saved genograph from a JSON file">Load JSON</button>
+                <button id="btn-json-guide" data-tooltip="Download the JSON schema guide for AI-assisted editing">JSON Guide</button>
+                <button id="btn-save" data-tooltip="Save the current genograph as a JSON file">Download JSON</button>
+                <button id="btn-export-png" data-tooltip="Export the diagram as a PNG image">Download PNG</button>
+                <button id="btn-relayout" data-tooltip="Reset all positions and re-run auto-layout">↺ Reset Layout</button>
             </div>
-            <input id="file-input" type="file" accept=".json" hidden />
         </header>
 
         <div id="main">
@@ -27,6 +28,7 @@
                         <h3>People</h3>
                         <button id="btn-add-person" class="btn-add" title="Add person">+ Add</button>
                     </div>
+                    <p class="section-hint">Everyone in the family system — family members, the client, and key figures.</p>
                     <div id="people-list"></div>
                 </section>
 
@@ -35,14 +37,16 @@
                         <h3>Relationships</h3>
                         <button id="btn-add-union" class="btn-add" title="Add relationship">+ Add</button>
                     </div>
+                    <p class="section-hint">Romantic or co-parenting pairs. Assign children here, not under People.</p>
                     <div id="unions-list"></div>
                 </section>
 
                 <section class="editor-section" id="family-relations-section">
                     <div class="section-header">
-                        <h3>Family Relations</h3>
-                        <button id="btn-add-family-relation" class="btn-add" title="Add family relation">+ Add</button>
+                        <h3>Other Family Connections</h3>
+                        <button id="btn-add-family-relation" class="btn-add" title="Add family connection">+ Add</button>
                     </div>
+                    <p class="section-hint">For relatives whose shared parents aren't in the diagram — aunts, uncles, or off-diagram siblings.</p>
                     <div id="family-relations-list"></div>
                 </section>
 
@@ -51,6 +55,7 @@
                         <h3>Connections</h3>
                         <button id="btn-add-bond" class="btn-add" title="Add connection">+ Add</button>
                     </div>
+                    <p class="section-hint">Non-family support bonds — guardians, mentors, sponsors, close friends.</p>
                     <div id="bonds-list"></div>
                 </section>
             </aside>
@@ -61,15 +66,27 @@
                     <p>Add people and relationships<br>to see the diagram.</p>
                 </div>
                 <div id="legend">
+                    <div class="legend-drag-handle">Legend ⠿</div>
+                    <div class="legend-title">Gender</div>
+                    <div class="legend-row"><span class="legend-box legend-box-male"></span> Male</div>
+                    <div class="legend-row"><span class="legend-box legend-box-female"></span> Female</div>
+                    <div class="legend-row"><span class="legend-box legend-box-other"></span> Non-Binary</div>
+                    <div class="legend-row"><span class="legend-box legend-box-unknown"></span> Unknown</div>
+                    <div class="legend-divider"></div>
                     <div class="legend-title">Relationship Quality</div>
                     <div class="legend-row"><span class="legend-swatch" style="background:#9ca3af"></span> Unknown</div>
                     <div class="legend-row"><span class="legend-swatch" style="background:#16a34a"></span> Good</div>
                     <div class="legend-row"><span class="legend-swatch" style="background:#ca8a04"></span> Strained</div>
                     <div class="legend-row"><span class="legend-swatch" style="background:#dc2626"></span> Conflicted</div>
                     <div class="legend-divider"></div>
+                    <div class="legend-title">Line Style</div>
                     <div class="legend-row"><span class="legend-line-solid"></span> Active</div>
-                    <div class="legend-row"><span class="legend-line-dashed"></span> Separated / Divorced</div>
-                    <div class="legend-row"><span class="legend-line-support"></span> Support</div>
+                    <div class="legend-row"><span class="legend-line-dashed"></span> Inactive</div>
+                    <div class="legend-row"><span class="legend-line-support"></span> Support Bond</div>
+                    <div class="legend-divider"></div>
+                    <div class="legend-title">Indicators</div>
+                    <div class="legend-row legend-row-indicator"><span class="legend-indicator-primary"></span> Primary Subject</div>
+                    <div class="legend-row"><span class="legend-indicator-deceased"></span> Deceased</div>
                 </div>
             </div>
         </div>
